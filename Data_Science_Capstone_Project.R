@@ -4,7 +4,7 @@ library(stringr)
 # set.seed(123)
 
 #For sampling random lines, use function 'sample_lines' in LaF package.
-data <- sample_lines("./final/en_US/en_US.twitter.txt", n=10)
+data <- sample_lines("./final/en_US/en_US.twitter.txt", n=1000)
 
 #removing '\r' end of each lines.
 data <- str_remove(data, pattern="\\r$")
@@ -59,9 +59,36 @@ data <- str_split(data, "\\s")
   data <- lapply(data, unlist)
   data <- lapply(data, function(x) return(x[x !=""]))
 
-#After doning this, we split the punctuation.
+#After doning this, we splited the punctuation.
   
-data
+  
+#And let's split numbers
+  data <- lapply(data, str_split, pattern="(?=[0-9])")
+  data <- lapply(data, unlist)
+  data <- lapply(data, str_split, pattern="(?<=[0-9])")
+  data <- lapply(data, unlist)
+  data <- lapply(data, function(x) return(x[x !=""]))
+
+
+#removing punctuation
+whether_punct <- lapply(data, grepl, pattern="([[:punct:]])")
+whether_punct <- lapply(whether_punct, function(x) x = !x)
+
+for(i in 1:length(data)){
+  data[[i]] <- data[[i]][whether_punct[[i]]]
+}
+
+#removing numbers
+whether_num <- lapply(data, grepl, pattern="([0-9])")
+whether_num <- lapply(whether_num, function(x) x = !x)
+
+for(i in 1:length(data)){
+  data[[i]] <- data[[i]][whether_num[[i]]]
+}
+
+#to lower
+#lower.
+data <- lapply(data, tolower)
 
 
 library(sentimentr)
@@ -109,9 +136,10 @@ if(recounting != 0){
   unremoved_profanity <- unlist(data)[profanity_index]
   unremoved_profanity
   profanity[length(profanity)+seq(from=1, by=1, length.out=length(unremoved_profanity))] <- unremoved_profanity
+  
+  data <- lapply(data, remove_profanity, profanity = profanity)
 }
 
-data <- lapply(data, remove_profanity, profanity = profanity)
 
 
 #last counting
@@ -122,4 +150,14 @@ c(firstcounting, recounting, lastcounting)
 
 
 #By it, all profanity is removed.
+
+
+
+data
+
+freq_table <- table(unlist(data))
+
+freq_table <- freq_table[order(freq_table, decreasing = TRUE)]
+
+head(freq_table, 30)
 

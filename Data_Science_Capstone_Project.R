@@ -1,7 +1,7 @@
 library(LaF)
 library(stringr)
 
-set.seed(123)
+# set.seed(123)
 
 #For sampling random lines, use function 'sample_lines' in LaF package.
 data <- sample_lines("./final/en_US/en_US.twitter.txt", n=10)
@@ -63,4 +63,63 @@ data <- str_split(data, "\\s")
   
 data
 
+
+library(sentimentr)
+
+#profanity lexicons are here
+#'::' is used when we use function of specific package
+#that is not loaded.
+#source : https://towardsdatascience.com/how-to-catch-profanity-with-r-4a21e024d4db
+# lexicon::profanity_alvarez
+# lexicon::profanity_banned
+# lexicon::profanity_arr_bad
+
+#Preparing Profanity lexicons.
+pro1 <- lexicon::profanity_alvarez
+pro2 <- lexicon::profanity_banned
+pro3 <- lexicon::profanity_arr_bad
+pro4 <- lexicon::profanity_racist
+pro5 <- lexicon::profanity_zac_anger
+
+profanity <- union(union(union(pro1, pro2), union(pro3, pro4)), pro5)
+
+#Profanity counting
+firstcounting <- sum(profanity(unlist(data), profanity)$profanity_count)
+
+#Removing profanity
+remove_profanity <- function(text, profanity){
+  for(word in profanity){
+    matching <- grep(pattern=word, x=text, fixed = TRUE)
+    if(length(matching) >= 1){
+      text <- text[-matching]
+    }
+  }
+  return(text)
+}
+
+data <- lapply(data, remove_profanity, profanity = profanity)
+
+
+#Profanity 'Re'counting
+recounting <- sum(profanity(unlist(data), profanity)$profanity_count)
+
+#profanity that wasn't removed finding and adding it to lexicon and remove again with new lexicon
+if(recounting != 0){
+  profanity_index <- which(profanity(unlist(data), profanity)$profanity_count != 0)
+  unremoved_profanity <- unlist(data)[profanity_index]
+  unremoved_profanity
+  profanity[length(profanity)+seq(from=1, by=1, length.out=length(unremoved_profanity))] <- unremoved_profanity
+}
+
+data <- lapply(data, remove_profanity, profanity = profanity)
+
+
+#last counting
+lastcounting <- sum(profanity(unlist(data), profanity)$profanity_count)
+
+data
+c(firstcounting, recounting, lastcounting)
+
+
+#By it, all profanity is removed.
 

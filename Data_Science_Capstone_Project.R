@@ -1,14 +1,14 @@
 library(LaF)
 library(stringr)
+library(ggplot2)
 
-# set.seed(123)
+set.seed(12345)
 
 #For sampling random lines, use function 'sample_lines' in LaF package.
-data <- sample_lines("./final/en_US/en_US.twitter.txt", n=1000)
+data <- sample_lines("./final/en_US/en_US.news.txt", n=1000)
 
 #removing '\r' end of each lines.
 data <- str_remove(data, pattern="\\r$")
-
 
 #We will use 'str_split()' in stringr package as main function for split charater.
 
@@ -152,12 +152,72 @@ c(firstcounting, recounting, lastcounting)
 #By it, all profanity is removed.
 
 
+#EDA
+#First, the number of totoal lines.
+length(data) #1000
 
-data
+#Second, number of tokens of each lines.
+num_of_token <- lapply(data, length)
+num_of_token_vec <- unlist(num_of_token)
 
-freq_table <- table(unlist(data))
+#Create histogram.
+h <- hist(num_of_token_vec, main = 'The number of tokens for each lines', 
+     xlab='The number of tokens', ylab='Frequency', breaks = length(unique(num_of_token_vec))-1)
+text(h$mids, h$counts, labels = h$counts, adj = c(0.5, -0.15))
 
-freq_table <- freq_table[order(freq_table, decreasing = TRUE)]
+#Third, Frequency of words without stopwords
+library(stopwords)
+stopwords <- c(stopwords(), "re", "d", "ll", "t", "s", "m", "ve", "us", "don", "st", "th", "u", "didn")
+stopwords <- stopwords[-grep(pattern="\'", stopwords)]
 
-head(freq_table, 30)
+data1 <- data
+
+remove_stopword <- function(text, stopword){
+  for(word in stopword){
+    matching <- grep(pattern=paste("^", word, "$", sep=""), x=text)
+    if(length(matching) >= 1){
+      text <- text[-matching]
+    }
+  }
+  return(text)
+}
+
+data1 <- lapply(data1, remove_stopword, stopword = stopwords)
+
+
+#Create Word Frequency table
+t <- table(unlist(data1))
+head(t[order(t, decreasing=TRUE)], 100)
+#Create histogram
+df_t <- as.data.frame(t)
+df_t <- df_t[order(df_t[,2], decreasing = TRUE),]
+b <- barplot(df_t$Freq[1:20], names.arg=as.character(df_t$Var1[1:20]), main="Frequency of words in news", 
+        xlab='Words', ylab='Frequency', cex.names = 0.55)
+text(x=b, y=df_t$Freq[1:20], labels=df_t$Freq[1:20], adj=c(0.5, 1))
+
+
+#Create N-grams
+#Create new function for this.
+make_bigrams <- function(text){
+  tokens <- c()
+  for(i in 1:length(text)-1){
+    tokens[i] <- paste(text[i], text[i+1])
+  }
+  tokens
+}
+
+make_trigrams <- function(text){
+  tokens <- c()
+  for(i in 1:length(text)-2){
+    tokens[i] <- paste(text[i], text[i+1], text[i+2])
+  }
+  tokens
+}
+
+#2-grams
+bigrams <- lapply(data, make_bigrams)
+
+#3-grams
+trigrams <- lapply(data, make_trigrams)
+
 

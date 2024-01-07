@@ -221,3 +221,45 @@ bigrams <- lapply(data, make_bigrams)
 trigrams <- lapply(data, make_trigrams)
 
 
+##Word Embedding
+library(word2vec)
+embed_model <- word2vec(x=data, dim=5, iter=20, window = 2, min_count = 1)
+word_vectors <- as.matrix(embed_model)
+
+
+#Find vector of words
+find_vec <- function(word){
+  return(word_vectors[word,])
+}
+
+##replace 3-grams with vectors
+trigramvec <- matrix(nrow=23293, ncol=19)
+trigramvec <- as.data.frame(trigramvec)
+dim(trigramvec) 
+trigramvec[,1] <- unlist(trigrams)
+colnames(trigramvec)[1] <- 'trigram'
+
+trigramvec[,2:4] <- str_split(trigramvec[,1], "\\s", simplify = TRUE)[,1:3]
+for(i in 1:dim(trigramvec)[1]){
+  trigramvec[i,5:9] <- find_vec(trigramvec[i,2])
+  trigramvec[i,10:14] <- find_vec(trigramvec[i,3])
+  trigramvec[i,15:19] <- find_vec(trigramvec[i,4])
+}
+
+##3grams to vector has been completed.
+
+#modeling rnn
+library(abind)
+
+input <- abind(trigramvec[5:9], trigramvec[10:14], along = 3)
+input <- aperm(input, c(1, 3, 2))
+output <- abind(trigramvec[10:14], trigramvec[15:19], along = 3)
+output <- aperm(output, c(1, 3, 2))
+
+
+
+model <- trainr(Y=output, X=input, learningrate=1, hidden_dim=2, batch_size = 30, numepochs = 10)
+
+
+
+

@@ -253,13 +253,25 @@ library(abind)
 
 input <- abind(trigramvec[5:9], trigramvec[10:14], along = 3)
 input <- aperm(input, c(1, 3, 2))
-output <- abind(trigramvec[10:14], trigramvec[15:19], along = 3)
-output <- aperm(output, c(1, 3, 2))
+# output <- abind(trigramvec[10:14], trigramvec[15:19], along = 3)
+# output <- aperm(output, c(1, 3, 2))
+output <- trigramvec[15:19]
 
 
+library(caret)
 
-model <- trainr(Y=output, X=input, learningrate=1, hidden_dim=2, batch_size = 30, numepochs = 10)
+model <- keras_model_sequential() %>%
+  layer_dense(input_shape = c(2, 5), units=2) %>%
+  layer_simple_rnn(units=2) %>%
+  layer_dense(units=1)
+
+model %>% compile(loss='cosine_similarity',
+                  optimizer = 'RMSprop',
+                  metrics = c('cosine_similarity'))
 
 
-
-
+trained_model <- model %>% fit(x = input,
+                               y = output,
+                               batch_size = 10,
+                               epochs = 1,
+                               )

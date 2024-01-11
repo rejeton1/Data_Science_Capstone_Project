@@ -256,14 +256,17 @@ input <- aperm(input, c(1, 3, 2))
 # output <- abind(trigramvec[10:14], trigramvec[15:19], along = 3)
 # output <- aperm(output, c(1, 3, 2))
 output <- trigramvec[15:19]
+output <- as.matrix(output)
+#we had to have out output class as matrix, otherwise, error occured.
 
-
+library(keras)
 library(caret)
+install_keras()
 
 model <- keras_model_sequential() %>%
-  layer_dense(input_shape = c(2, 5), units=2) %>%
-  layer_simple_rnn(units=2) %>%
-  layer_dense(units=1)
+  layer_dense(input_shape = c(2, 5), units=30) %>%
+  layer_simple_rnn(units=30) %>%
+  layer_dense(units=5)
 
 model %>% compile(loss='cosine_similarity',
                   optimizer = 'RMSprop',
@@ -272,6 +275,29 @@ model %>% compile(loss='cosine_similarity',
 
 trained_model <- model %>% fit(x = input,
                                y = output,
-                               batch_size = 10,
-                               epochs = 1,
+                               batch_size = 32,
+                               epochs = 5,
                                )
+
+plot(trained_model)
+
+#predict trainining set.
+pred <- model %>% predict(head(input))
+
+library(lsa)
+
+pred_words <- c()
+for(i in 1:dim(pred)[1]){
+  cosines <- c()
+  for(t in 1:dim(word_vectors)[1]){
+    cosines[t] <- cosine(pred[i,], word_vectors[t,])
+  }
+  pred_words[i] <- rownames(word_vectors)[which.max(cosines)]
+}
+
+cbind(pred_words, trigramvec[1:6,4])
+
+
+
+
+

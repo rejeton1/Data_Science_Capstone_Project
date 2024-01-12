@@ -223,8 +223,23 @@ trigrams <- lapply(data, make_trigrams)
 
 ##Word Embedding
 library(word2vec)
-embed_model <- word2vec(x=data, dim=5, iter=20, window = 2, min_count = 1)
+embed_model <- word2vec(x=data, dim=10000, iter=10, window = 5, min_count = 1)
 word_vectors <- as.matrix(embed_model)
+
+#i want to check if the embedding has been done well with cosine similarity
+library(lsa)
+
+find_cs <- function(word){
+  cosines <- c()
+  for(i in 1:dim(word_vectors)[1]){
+    cosines[i] <- cosine(word_vectors[word,], word_vectors[i,])
+  }
+  nearest_words <- rownames(word_vectors)[order(cosines, decreasing = TRUE)][1:6]
+  nearest_cosines <- cosines[order(cosines, decreasing = TRUE)][1:6]
+  far_words <- rownames(word_vectors)[order(cosines)][1:6]
+  far_cosines <- cosines[order(cosines)][1:6]
+  cbind(nearest_words, nearest_cosines, far_words, far_cosines)
+}
 
 
 #Find vector of words
@@ -284,7 +299,7 @@ plot(trained_model)
 #predict trainining set.
 pred <- model %>% predict(head(input))
 
-library(lsa)
+
 
 pred_words <- c()
 for(i in 1:dim(pred)[1]){

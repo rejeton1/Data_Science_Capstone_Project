@@ -5,7 +5,7 @@ library(ggplot2)
 set.seed(12345)
 
 #For sampling random lines, use function 'sample_lines' in LaF package.
-data <- sample_lines("./final/en_US/en_US.news.txt", n=1000)
+data <- sample_lines("./final/en_US/en_US.news.txt", n=100)
 
 #removing '\r' end of each lines.
 data <- str_remove(data, pattern="\\r$")
@@ -219,36 +219,86 @@ bigrams <- lapply(data, make_bigrams)
 
 #3-grams
 trigrams <- lapply(data, make_trigrams)
+# 
+# ##################################################
+# 
+# 
+# ##Word Embedding
+# library(word2vec)
+# embed_model <- word2vec(x=data, dim=100, iter=10, window = 5, min_count = 1)
+# word_vectors <- as.matrix(embed_model)
+# 
+# predict(embed_model, newdata = "wood", type = "nearest", top_n=10)
+# 
+# x <- rnorm(100, mean=0, sd=.1)
+# predict(predict(embed_model, newdata = x, type = "nearest", top_n=10))
+# 
+# 
+# ##Word Embedding parameter test(because at the basic parameter value, the words are not distributed well.)
+# ##1. in according to dim
+# dim <- c(10, 50, 100, 200, 300, 500, 1000, 1500, 2000,3000, 4000, 5000, 10000, 20000)
+# similarity_mean <- c()
+# num <- 1
+# for(i in dim){
+#   model <- word2vec(x=data, dim=i, iter=10, window = 5, min_count = 1)
+#   similarity_mean[num] <- mean(predict(model, newdata="mood", type='nearest', top_n=30)$mood$similarity)
+#   num <- num + 1
+# }
+# 
+# plot(x=dim, y=similarity_sd, type="l")
+# 
+# #after dim 10000, the sd goes lower when the dim gets higher.
+# 
+# #2. iter
+# iter <- c(1, 3, 5, 7, 10, 20, 30, 100, 200)
+# similarity_mean <- c()
+# num <- 1
+# for(i in iter){
+#   model <- word2vec(x=data, dim=5000, iter=i, window = 5, min_count = 1)
+#   similarity_mean[num] <- mean(predict(model, newdata="mood", type='nearest', top_n=30)$mood$similarity)
+#   num <- num + 1
+# }
+# 
+# plot(x=iter, y=similarity_mean, type="l")
+# 
+# #For trade-off btw amount of calculation and distribution, i picked dim=5000, iter=10 or 100
+# #OK, again
+# embed_model <- word2vec(x=data, dim=5000, iter=10, window = 5, min_count = 1)
+# word_vectors <- as.matrix(embed_model)
+# 
+# predict(embed_model, newdata = "mood", type = "nearest", top_n=10)
+# 
+# x <- rnorm(5000, mean=0, sd=.1)
+# predict(embed_model, newdata = x, type = "nearest", top_n=10)
 
+#but i think if we have to use dim 5000 vector with word2vec, it had better to use one-hot encoding(3902 dim)
+#One-hot encoding
+library(caret)
 
-##Word Embedding
-library(word2vec)
-embed_model <- word2vec(x=data, dim=10000, iter=10, window = 5, min_count = 1)
-word_vectors <- as.matrix(embed_model)
+data2 <- data.frame(word = unique(unlist(data)))
 
-#i want to check if the embedding has been done well with cosine similarity
-library(lsa)
+dummy <- dummyVars(" ~ .", data=data2)
+one_hot <- data.frame(predict(dummy, newdata = data2)) 
+rownames(one_hot) <- data2[,1]
 
-find_cs <- function(word){
-  cosines <- c()
-  for(i in 1:dim(word_vectors)[1]){
-    cosines[i] <- cosine(word_vectors[word,], word_vectors[i,])
+#preprocess one_hot encoding(to non-zero value)
+for(i in 1:852){
+  for(t in 1:852){
+    if(one_hot[i, t] == 0){
+      one_hot[i, t] <- one_hot[i, t] + .01
+    }else if(one_hot[i, t] == 1){
+      one_hot[i, t] <- one_hot[i, t] - .01
+    }
   }
-  nearest_words <- rownames(word_vectors)[order(cosines, decreasing = TRUE)][1:6]
-  nearest_cosines <- cosines[order(cosines, decreasing = TRUE)][1:6]
-  far_words <- rownames(word_vectors)[order(cosines)][1:6]
-  far_cosines <- cosines[order(cosines)][1:6]
-  cbind(nearest_words, nearest_cosines, far_words, far_cosines)
 }
-
 
 #Find vector of words
 find_vec <- function(word){
-  return(word_vectors[word,])
+  return(one_hot[word,])
 }
 
 ##replace 3-grams with vectors
-trigramvec <- matrix(nrow=23293, ncol=19)
+trigramvec <- matrix(nrow=length(unlist(trigrams)), ncol= 4 + 3*dim(one_hot)[2])
 trigramvec <- as.data.frame(trigramvec)
 dim(trigramvec) 
 trigramvec[,1] <- unlist(trigrams)
@@ -256,21 +306,24 @@ colnames(trigramvec)[1] <- 'trigram'
 
 trigramvec[,2:4] <- str_split(trigramvec[,1], "\\s", simplify = TRUE)[,1:3]
 for(i in 1:dim(trigramvec)[1]){
-  trigramvec[i,5:9] <- find_vec(trigramvec[i,2])
-  trigramvec[i,10:14] <- find_vec(trigramvec[i,3])
-  trigramvec[i,15:19] <- find_vec(trigramvec[i,4])
+  trigramvec[i,5:856] <- find_vec(trigramvec[i,2])
+  trigramvec[i,857:1708] <- find_vec(trigramvec[i,3])
+  trigramvec[i,1709:2560] <- find_vec(trigramvec[i,4])
 }
+
+
+
 
 ##3grams to vector has been completed.
 
 #modeling rnn
 library(abind)
 
-input <- abind(trigramvec[5:9], trigramvec[10:14], along = 3)
+input <- abind(trigramvec[5:856], trigramvec[857:1708], along = 3)
 input <- aperm(input, c(1, 3, 2))
 # output <- abind(trigramvec[10:14], trigramvec[15:19], along = 3)
 # output <- aperm(output, c(1, 3, 2))
-output <- trigramvec[15:19]
+output <- trigramvec[1709:2560]
 output <- as.matrix(output)
 #we had to have out output class as matrix, otherwise, error occured.
 
@@ -279,12 +332,12 @@ library(caret)
 install_keras()
 
 model <- keras_model_sequential() %>%
-  layer_dense(input_shape = c(2, 5), units=30) %>%
-  layer_simple_rnn(units=30) %>%
-  layer_dense(units=5)
+  layer_dense(input_shape = c(2, 852), units=5000) %>%
+  layer_simple_rnn(units=5000) %>%
+  layer_dense(units=852, activation = 'sigmoid')
 
 model %>% compile(loss='cosine_similarity',
-                  optimizer = 'RMSprop',
+                  optimizer = 'adam',
                   metrics = c('cosine_similarity'))
 
 
@@ -294,23 +347,17 @@ trained_model <- model %>% fit(x = input,
                                epochs = 5,
                                )
 
-plot(trained_model)
 
 #predict trainining set.
-pred <- model %>% predict(head(input))
-
+pred <- model %>% predict(head(input,10))
 
 
 pred_words <- c()
 for(i in 1:dim(pred)[1]){
-  cosines <- c()
-  for(t in 1:dim(word_vectors)[1]){
-    cosines[t] <- cosine(pred[i,], word_vectors[t,])
-  }
-  pred_words[i] <- rownames(word_vectors)[which.max(cosines)]
+  pred_words[i] <- data2[which.max(pred[i,]),1]
 }
 
-cbind(pred_words, trigramvec[1:6,4])
+cbind(pred_words, trigramvec[1:10,4])
 
 
 

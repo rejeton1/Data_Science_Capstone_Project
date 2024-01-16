@@ -5,7 +5,7 @@ library(ggplot2)
 set.seed(12345)
 
 #For sampling random lines, use function 'sample_lines' in LaF package.
-data <- sample_lines("./final/en_US/en_US.news.txt", n=1000)
+data <- sample_lines("./final/en_US/en_US.news.txt", n=5000)
 
 #removing '\r' end of each lines.
 data <- str_remove(data, pattern="\\r$")
@@ -153,6 +153,7 @@ c(firstcounting, recounting, lastcounting)
 
 
 #Lemmatization
+library(textstem)
 data <- lapply(data, lemmatize_words)
 
 
@@ -220,6 +221,9 @@ make_trigrams <- function(text){
   tokens
 }
 
+#unigrams
+unigrams <- data
+
 #2-grams
 bigrams <- lapply(data, make_bigrams)
 
@@ -228,7 +232,59 @@ trigrams <- lapply(data, make_trigrams)
 # 
 # ##################################################
 
+#make uni, bi, trigrams data into data frame
+unigrams <- as.data.frame(unlist(data))
+colnames(unigrams) <- 'word'
+
+bigrams <- as.data.frame(unlist(bigrams))
+bigrams[,2:3] <- str_split(bigrams[,1], "\\s", simplify = TRUE)[,1:2]
+colnames(bigrams) <- c('bigram', 'w1', 'w2')
 
 
+trigrams <- as.data.frame(unlist(trigrams))
+trigrams[,2:4] <- str_split(trigrams[,1], "\\s", simplify = TRUE)[,1:3]
+colnames(trigrams) <- c('trigram', 'w1', 'w2', 'w3')
+
+
+
+##Add count column
+add_count <- function(ngrams){
+  col_num <- ncol(ngrams)+1
+  for(word in unique(ngrams[,1])){
+    ngrams[ngrams[,1]==word, col_num] = sum(ngrams[,1]==word)
+  }
+  colnames(ngrams)[col_num] <- 'count'
+  return(ngrams)
+}
+
+unigrams <- add_count(unigrams)
+bigrams <- add_count(bigrams)
+trigrams <- add_count(trigrams)
+
+
+#Add Nc column
+add_Nc <- function(ngrams){
+  col_num <- ncol(ngrams) + 1
+  for(count in unique(ngrams[,'count'])){
+    ngrams[ngrams[,'count']==count, col_num] = length(unique(ngrams[ngrams[,'count']==count, 1]))
+  }
+  colnames(ngrams)[col_num] <- 'Nc'
+  return(ngrams)
+}
+
+unigrams <- add_Nc(unigrams)
+bigrams <- add_Nc(bigrams)
+trigrams <- add_Nc(trigrams)
+
+#Calculate coefficient 'd'(good-turing estimation)
+
+# get_d <- function(ngram, data){
+#   c <- data[data[,1]==ngram, 'count'][1]
+#   Nc <- data[data[,1]==ngram, 'Nc'][1]
+#   Nc1
+# }
+
+unique(bigrams[,'Nc'])
+unique(trigrams[,'Nc'])
 
 

@@ -284,7 +284,8 @@ trigrams <- add_Nc(trigrams)
 #   Nc1
 # }
 
-unique(bigrams[,'Nc'])
-unique(trigrams[,'Nc'])
+x <- unique(bigrams[,'count'])
+y <- unique(trigrams[,'count'])
 
-
+x[order(x)]
+y[order(y)]

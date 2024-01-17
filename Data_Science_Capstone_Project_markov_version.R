@@ -1,11 +1,11 @@
 library(LaF)
 library(stringr)
-library(ggplot2)
+# library(ggplot2)
 
 set.seed(12345)
 
 #For sampling random lines, use function 'sample_lines' in LaF package.
-data <- sample_lines("./final/en_US/en_US.news.txt", n=5000)
+data <- sample_lines("./final/en_US/en_US.news.txt", n=100)
 
 #removing '\r' end of each lines.
 data <- str_remove(data, pattern="\\r$")
@@ -244,6 +244,15 @@ colnames(bigrams) <- c('bigram', 'w1', 'w2')
 trigrams <- as.data.frame(unlist(trigrams))
 trigrams[,2:4] <- str_split(trigrams[,1], "\\s", simplify = TRUE)[,1:3]
 colnames(trigrams) <- c('trigram', 'w1', 'w2', 'w3')
+
+#add unseen ngrams in data frame
+for(word1 in unique(unigrams)[,1]){
+  for(word2 in unique(unigrams)[,1]){
+    if(!(paste(word1, word2) %in% unique(bigrams[,1]))){
+      bigrams[dim(bigrams)[1]+1,1] <- paste(word1, word2)
+    }
+  }
+}
 
 
 

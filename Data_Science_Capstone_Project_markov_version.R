@@ -5,7 +5,7 @@ library(stringr)
 set.seed(12345)
 
 #For sampling random lines, use function 'sample_lines' in LaF package.
-data <- sample_lines("./final/en_US/en_US.news.txt", n=100)
+data <- sample_lines("./final/en_US/en_US.news.txt", n=1000)
 
 #removing '\r' end of each lines.
 data <- str_remove(data, pattern="\\r$")
@@ -157,49 +157,31 @@ library(textstem)
 data <- lapply(data, lemmatize_words)
 
 
+length(unlist(data))
 
-#EDA
-#First, the number of totoal lines.
-length(data) #1000
+unigram_freq <- matrix(ncol=2)
+unigram_freq <- as.data.frame(unigram_freq)
+colnames(unigram_freq) <- c('word', 'freq')
+num <- 1
 
-#Second, number of tokens of each lines.
-num_of_token <- lapply(data, length)
-num_of_token_vec <- unlist(num_of_token)
-
-#Create histogram.
-h <- hist(num_of_token_vec, main = 'The number of tokens for each lines', 
-     xlab='The number of tokens', ylab='Frequency', breaks = length(unique(num_of_token_vec))-1)
-text(h$mids, h$counts, labels = h$counts, adj = c(0.5, -0.15))
-
-#Third, Frequency of words without stopwords
-library(stopwords)
-stopwords <- c(stopwords(), "re", "d", "ll", "t", "s", "m", "ve", "us", "don", "st", "th", "u", "didn")
-stopwords <- stopwords[-grep(pattern="\'", stopwords)]
-
-data1 <- data
-
-remove_stopword <- function(text, stopword){
-  for(word in stopword){
-    matching <- grep(pattern=paste("^", word, "$", sep=""), x=text)
-    if(length(matching) >= 1){
-      text <- text[-matching]
-    }
-  }
-  return(text)
+for(word in unique(unlist(data))){
+  unigram_freq[num,1] <- word
+  unigram_freq[num,2] <- sum(unlist(data)==word)
+  num <- num + 1
 }
 
-data1 <- lapply(data1, remove_stopword, stopword = stopwords)
+unigram_freq <- unigram_freq[order(unigram_freq[,2], decreasing = TRUE),]
+
+for(i in 1:dim(unigram_freq)[1]){
+  unigram_freq[i,3] <- 100*sum(unigram_freq[1:i,2])/length(unlist(data))
+}
+
+colnames(unigram_freq)[3] <- 'cumul'
+
+which(unigram_freq[,3] >= 80)[1]
+length(unigram_freq[,1])
 
 
-#Create Word Frequency table
-t <- table(unlist(data1))
-head(t[order(t, decreasing=TRUE)], 100)
-#Create histogram
-df_t <- as.data.frame(t)
-df_t <- df_t[order(df_t[,2], decreasing = TRUE),]
-b <- barplot(df_t$Freq[1:20], names.arg=as.character(df_t$Var1[1:20]), main="Frequency of words in news", 
-        xlab='Words', ylab='Frequency', cex.names = 0.55)
-text(x=b, y=df_t$Freq[1:20], labels=df_t$Freq[1:20], adj=c(0.5, 1))
 
 
 
@@ -231,46 +213,6 @@ bigrams <- lapply(data, make_bigrams)
 trigrams <- lapply(data, make_trigrams)
 # 
 # ##################################################
-
-#make uni, bi, trigrams data into data frame
-unigrams <- as.data.frame(unlist(data))
-colnames(unigrams) <- 'word'
-
-bigrams <- as.data.frame(unlist(bigrams))
-bigrams[,2:3] <- str_split(bigrams[,1], "\\s", simplify = TRUE)[,1:2]
-colnames(bigrams) <- c('bigram', 'w1', 'w2')
-
-
-trigrams <- as.data.frame(unlist(trigrams))
-trigrams[,2:4] <- str_split(trigrams[,1], "\\s", simplify = TRUE)[,1:3]
-colnames(trigrams) <- c('trigram', 'w1', 'w2', 'w3')
-
-#add unseen ngrams in data frame
-for(word1 in unique(unigrams)[,1]){
-  for(word2 in unique(unigrams)[,1]){
-    if(!(paste(word1, word2) %in% unique(bigrams[,1]))){
-      bigrams[dim(bigrams)[1]+1,1] <- paste(word1, word2)
-    }
-  }
-}
-
-
-
-##Add count column
-add_count <- function(ngrams){
-  col_num <- ncol(ngrams)+1
-  for(word in unique(ngrams[,1])){
-    ngrams[ngrams[,1]==word, col_num] = sum(ngrams[,1]==word)
-  }
-  colnames(ngrams)[col_num] <- 'count'
-  return(ngrams)
-}
-
-unigrams <- add_count(unigrams)
-bigrams <- add_count(bigrams)
-trigrams <- add_count(trigrams)
-
-
 #Add Nc column
 add_Nc <- function(ngrams){
   col_num <- ncol(ngrams) + 1
@@ -280,6 +222,39 @@ add_Nc <- function(ngrams){
   colnames(ngrams)[col_num] <- 'Nc'
   return(ngrams)
 }
+
+
+
+reduced_unigram <- data.frame(word=unigram_freq[1:412,1], count=unigram_freq[1:412,2])
+reduced_unigram <- add_Nc(reduced_unigram)
+
+reduced_bigram <- matrix(ncol=3)
+reduced_bigram <- as.data.frame(reduced_bigram)
+
+for(word1 in reduced_unigram[,1]){
+  for(word2 in reduced_unigram[,1]){
+    reduced_bigram[dim(reduced_bigram)[1]+1,1] <- paste(word1, word2)
+  }
+}
+
+num2 <- 1
+for(bigram in reduced_bigram[,1]){
+  reduced_bigram[num2,2] <- sum(unlist(bigrams)==bigram)
+  num2 <- num2 + 1
+}
+colnames(reduced_bigram)[2] <- 'count'
+
+
+
+
+
+
+unigrams <- add_count(unigrams)
+bigrams <- add_count(bigrams)
+trigrams <- add_count(trigrams)
+
+
+
 
 unigrams <- add_Nc(unigrams)
 bigrams <- add_Nc(bigrams)

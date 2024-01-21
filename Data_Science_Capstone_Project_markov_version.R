@@ -265,7 +265,7 @@ get_d <- function(ngram){
   for(count in unique(ngram[,'count'])){
     Nc <- ngram[ngram[,'count']==count,'Nc'][1]
     Nc1 <- ngram[ngram[,'count']==count+1,'Nc'][1]
-    ngram[ngram[,'count']==count, col_num] <- (count+1/count)*(Nc1/Nc)
+    ngram[ngram[,'count']==count, col_num] <- ((count+1)/count)*(Nc1/Nc)
   }
   colnames(ngram)[col_num] <- 'd'
   
@@ -292,9 +292,23 @@ predict_next <- function(word1){
         (bigram[bigram[,1]==paste(word1, word2), 'count']/sum(bigram[bigram[,2]==word1,'count']))
     }else{
       B <- 1 - (sum(bigram[bigram[,2]==word1,'d']*bigram[bigram[,2]==word1,'count'])/sum(bigram[bigram[,2]==word1,'count']))
+      exist <- bigram[,3] %in% unique(bigram[bigram[,2]==word1, 3])
+      wi <- bigram[,3][!exist]
+      p <- c()
+      for(word_notexist in wi){
+        p[length(p)+1] <- sum(bigram[bigram[,3]==word_notexist,'d']*bigram[bigram[,3]==word_notexist, 'count'])/sum(bigram[,4])
+      }
+      p[is.nan(p)] <- (bigram[bigram[,'count']==1,'Nc'][1]/bigram[bigram[,'count']==0,'Nc'])/sum(bigram[,4])
+      denom <- sum(p)
+      a <- B/denom
+      
+      probability[row_num, 'word'] <- word2
+      probability[row_num, 'prob'] <- a * sum(bigram[bigram[,3]==word2,'d']*bigram[bigram[,3]==word2, 'count'])/sum(bigram[,4])
     }
     row_num <- row_num + 1
   }
+  probability <- probability[order(probability[,'prob']),]
+  return(probability)
 }
 
 

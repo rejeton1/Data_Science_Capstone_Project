@@ -241,6 +241,7 @@ unigram[,1] <- unique(unlist(unigrams))
 colnames(unigram) <- 'unigram'
 unigram <- add_count(unigram, unigrams)
 unigram <- add_Nc(unigram)
+unigram <- unigram[order(unigram[,'count'], decreasing = TRUE),]
 
 
 
@@ -255,6 +256,7 @@ bigram <- add_Nc(bigram)
 bigram[dim(bigram)[1]+1,1:5] <- c('unk', 'unk', 'unk', 0, (dim(unigram)[1]^2-dim(bigram)[1]))
 bigram[,'count'] <- as.integer(bigram[,'count'])
 bigram[,'Nc'] <- as.integer(bigram[,'Nc'])
+bigram <- bigram[order(bigram[,'count'], decreasing = TRUE),]
 
 
 
@@ -284,7 +286,9 @@ predict_next <- function(word1){
 
   row_num <- 1
   
-  for(word2 in unigram[,1]){
+  word_candidate <- union(bigram[bigram[,2]==word1,3], unigram[1:20,1])
+  
+  for(word2 in word_candidate){
     if(paste(word1, word2) %in% bigram[,1]){
       probability[row_num,'word'] <- word2
       probability[row_num,'prob'] <- 
@@ -302,13 +306,18 @@ predict_next <- function(word1){
       denom <- sum(p)
       a <- B/denom
       
-      probability[row_num, 'word'] <- word2
-      probability[row_num, 'prob'] <- a * sum(bigram[bigram[,3]==word2,'d']*bigram[bigram[,3]==word2, 'count'])/sum(bigram[,4])
+      if(word2 == 'unk'){
+        probability[row_num, 'word'] <- 'unk'
+        probability[row_num, 'prob'] <- a * (bigram[bigram[,'count']==1,'Nc'][1]/bigram[bigram[,'count']==0,'Nc'])/sum(bigram[,4])
+      }else{
+        probability[row_num, 'word'] <- word2
+        probability[row_num, 'prob'] <- a * sum(bigram[bigram[,3]==word2,'d']*bigram[bigram[,3]==word2, 'count'])/sum(bigram[,4])
+      }
     }
     row_num <- row_num + 1
   }
-  probability <- probability[order(probability[,'prob']),]
-  return(probability)
+  probability <- probability[order(probability[,'prob'], decreasing = TRUE),]
+  return(head(probability,5))
 }
 
 

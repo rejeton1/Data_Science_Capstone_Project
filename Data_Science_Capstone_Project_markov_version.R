@@ -214,51 +214,112 @@ trigrams <- lapply(data, make_trigrams)
 # 
 # ##################################################
 #Add Nc column
-add_Nc <- function(ngrams){
-  col_num <- ncol(ngrams) + 1
-  for(count in unique(ngrams[,'count'])){
-    ngrams[ngrams[,'count']==count, col_num] = length(unique(ngrams[ngrams[,'count']==count, 1]))
+add_Nc <- function(ngram){
+  col_num <- ncol(ngram) + 1
+  for(count in unique(ngram[,'count'])){
+    ngram[ngram[,'count']==count, col_num] = length(unique(ngram[ngram[,'count']==count, 1]))
   }
-  colnames(ngrams)[col_num] <- 'Nc'
-  return(ngrams)
+  colnames(ngram)[col_num] <- 'Nc'
+  return(ngram)
+}
+
+#Add count column
+add_count <- function(ngram, ngrams){
+  col_num <- ncol(ngram) + 1
+  row_num <- 1
+  for(word in ngram[,1]){
+    ngram[row_num, col_num] = sum(unlist(ngrams) == word)
+    row_num <- row_num + 1
+  }
+  colnames(ngram)[col_num] <- 'count'
+  return(ngram)
+}
+  
+unigram <- matrix(nrow=3230, ncol=1)
+unigram <- as.data.frame(unigram)
+unigram[,1] <- unique(unlist(unigrams))
+colnames(unigram) <- 'unigram'
+unigram <- add_count(unigram, unigrams)
+unigram <- add_Nc(unigram)
+
+
+
+
+bigram <- matrix(nrow=14729, ncol=3)
+bigram <- as.data.frame(bigram)
+bigram[,1] <- unique(unlist(bigrams))
+bigram[,2:3] <- str_split(bigram[,1], "\\s", simplify = TRUE)[,1:2]
+colnames(bigram) <- c('bigram', 'w1', 'w2')
+bigram <- add_count(bigram, bigrams)
+bigram <- add_Nc(bigram)
+bigram[dim(bigram)[1]+1,1:5] <- c('unk', 'unk', 'unk', 0, (dim(unigram)[1]^2-dim(bigram)[1]))
+bigram[,'count'] <- as.integer(bigram[,'count'])
+bigram[,'Nc'] <- as.integer(bigram[,'Nc'])
+
+
+
+
+#calculate d
+get_d <- function(ngram){
+  col_num <- ncol(ngram)+1
+  for(count in unique(ngram[,'count'])){
+    Nc <- ngram[ngram[,'count']==count,'Nc'][1]
+    Nc1 <- ngram[ngram[,'count']==count+1,'Nc'][1]
+    ngram[ngram[,'count']==count, col_num] <- (count+1/count)*(Nc1/Nc)
+  }
+  colnames(ngram)[col_num] <- 'd'
+  
+  ngram[is.na(ngram[,'d']),'d'] <- 0
+  return(ngram)
 }
 
 
+bigram <- get_d(bigram)
 
-reduced_unigram <- data.frame(word=unigram_freq[1:412,1], count=unigram_freq[1:412,2])
-reduced_unigram <- add_Nc(reduced_unigram)
 
-reduced_bigram <- matrix(ncol=3)
-reduced_bigram <- as.data.frame(reduced_bigram)
+predict_next <- function(word1){
+  probability <- matrix(ncol = 2)
+  probability <- as.data.frame(probability)
+  colnames(probability) <- c('word', 'prob')
 
-for(word1 in reduced_unigram[,1]){
-  for(word2 in reduced_unigram[,1]){
-    reduced_bigram[dim(reduced_bigram)[1]+1,1] <- paste(word1, word2)
+  row_num <- 1
+  
+  for(word2 in unigram[,1]){
+    if(paste(word1, word2) %in% bigram[,1]){
+      probability[row_num,'word'] <- word2
+      probability[row_num,'prob'] <- 
+        bigram[bigram[,1]==paste(word1, word2), 'd']*
+        (bigram[bigram[,1]==paste(word1, word2), 'count']/sum(bigram[bigram[,2]==word1,'count']))
+    }else{
+      B <- 1 - (sum(bigram[bigram[,2]==word1,'d']*bigram[bigram[,2]==word1,'count'])/sum(bigram[bigram[,2]==word1,'count']))
+    }
+    row_num <- row_num + 1
   }
 }
 
-num2 <- 1
-for(bigram in reduced_bigram[,1]){
-  reduced_bigram[num2,2] <- sum(unlist(bigrams)==bigram)
-  num2 <- num2 + 1
-}
-colnames(reduced_bigram)[2] <- 'count'
+
+# reduced_unigram <- data.frame(word=unigram_freq[1:412,1], count=unigram_freq[1:412,2])
+# reduced_unigram <- add_Nc(reduced_unigram)
+# 
+# reduced_bigram <- matrix(ncol=3)
+# reduced_bigram <- as.data.frame(reduced_bigram)
+
+# for(word1 in reduced_unigram[,1]){
+#   for(word2 in reduced_unigram[,1]){
+#     reduced_bigram[dim(reduced_bigram)[1]+1,1] <- paste(word1, word2)
+#   }
+# }
+# 
+# num2 <- 1
+# for(bigram in reduced_bigram[,1]){
+#   reduced_bigram[num2,2] <- sum(unlist(bigrams)==bigram)
+#   num2 <- num2 + 1
+# }
+# colnames(reduced_bigram)[2] <- 'count'
 
 
 
 
-
-
-unigrams <- add_count(unigrams)
-bigrams <- add_count(bigrams)
-trigrams <- add_count(trigrams)
-
-
-
-
-unigrams <- add_Nc(unigrams)
-bigrams <- add_Nc(bigrams)
-trigrams <- add_Nc(trigrams)
 
 #Calculate coefficient 'd'(good-turing estimation)
 

@@ -5,7 +5,7 @@ library(stringr)
 set.seed(12345)
 
 #For sampling random lines, use function 'sample_lines' in LaF package.
-data <- sample_lines("./final/en_US/en_US.news.txt", n=1000)
+data <- sample_lines("./final/en_US/en_US.news.txt", n=5000)
 
 #removing '\r' end of each lines.
 data <- str_remove(data, pattern="\\r$")
@@ -235,7 +235,7 @@ add_count <- function(ngram, ngrams){
   return(ngram)
 }
   
-unigram <- matrix(nrow=3230, ncol=1)
+unigram <- matrix(nrow=length(unique(unlist(data))), ncol=1)
 unigram <- as.data.frame(unigram)
 unigram[,1] <- unique(unlist(unigrams))
 colnames(unigram) <- 'unigram'
@@ -246,14 +246,14 @@ unigram <- unigram[order(unigram[,'count'], decreasing = TRUE),]
 
 
 
-bigram <- matrix(nrow=14729, ncol=3)
+bigram <- matrix(nrow=length(unique(unlist(bigrams))), ncol=3)
 bigram <- as.data.frame(bigram)
 bigram[,1] <- unique(unlist(bigrams))
 bigram[,2:3] <- str_split(bigram[,1], "\\s", simplify = TRUE)[,1:2]
 colnames(bigram) <- c('bigram', 'w1', 'w2')
 bigram <- add_count(bigram, bigrams)
 bigram <- add_Nc(bigram)
-bigram[dim(bigram)[1]+1,1:5] <- c('unk', 'unk', 'unk', 0, (dim(unigram)[1]^2-dim(bigram)[1]))
+# bigram[dim(bigram)[1]+1,1:5] <- c('unk', 'unk', 'unk', 0, (dim(unigram)[1]^2-dim(bigram)[1]))
 bigram[,'count'] <- as.integer(bigram[,'count'])
 bigram[,'Nc'] <- as.integer(bigram[,'Nc'])
 bigram <- bigram[order(bigram[,'count'], decreasing = TRUE),]
@@ -278,6 +278,12 @@ get_d <- function(ngram){
 
 bigram <- get_d(bigram)
 
+#caculate p
+for(word in unigram[,1]){
+  unigram[unigram[,1]==word, 'pbo'] <- sum(bigram[bigram[,3]==word, 'd']*bigram[bigram[,3]==word,'count'])/
+    sum(bigram[,'count'])
+}
+
 
 predict_next <- function(word1){
   probability <- matrix(ncol = 2)
@@ -300,19 +306,19 @@ predict_next <- function(word1){
       wi <- bigram[,3][!exist]
       p <- c()
       for(word_notexist in wi){
-        p[length(p)+1] <- sum(bigram[bigram[,3]==word_notexist,'d']*bigram[bigram[,3]==word_notexist, 'count'])/sum(bigram[,4])
+        p[length(p)+1] <- unigram[unigram[,1]==word_notexist, 'pbo']
       }
       p[is.nan(p)] <- (bigram[bigram[,'count']==1,'Nc'][1]/bigram[bigram[,'count']==0,'Nc'])/sum(bigram[,4])
       denom <- sum(p)
       a <- B/denom
       
-      if(word2 == 'unk'){
-        probability[row_num, 'word'] <- 'unk'
-        probability[row_num, 'prob'] <- a * (bigram[bigram[,'count']==1,'Nc'][1]/bigram[bigram[,'count']==0,'Nc'])/sum(bigram[,4])
-      }else{
+      # if(word2 == 'unk'){
+      #   probability[row_num, 'word'] <- 'unk'
+      #   probability[row_num, 'prob'] <- a * (bigram[bigram[,'count']==1,'Nc'][1]/bigram[bigram[,'count']==0,'Nc'])/sum(bigram[,4])
+      # }else{
         probability[row_num, 'word'] <- word2
         probability[row_num, 'prob'] <- a * sum(bigram[bigram[,3]==word2,'d']*bigram[bigram[,3]==word2, 'count'])/sum(bigram[,4])
-      }
+      # }
     }
     row_num <- row_num + 1
   }
@@ -321,39 +327,3 @@ predict_next <- function(word1){
 }
 
 
-# reduced_unigram <- data.frame(word=unigram_freq[1:412,1], count=unigram_freq[1:412,2])
-# reduced_unigram <- add_Nc(reduced_unigram)
-# 
-# reduced_bigram <- matrix(ncol=3)
-# reduced_bigram <- as.data.frame(reduced_bigram)
-
-# for(word1 in reduced_unigram[,1]){
-#   for(word2 in reduced_unigram[,1]){
-#     reduced_bigram[dim(reduced_bigram)[1]+1,1] <- paste(word1, word2)
-#   }
-# }
-# 
-# num2 <- 1
-# for(bigram in reduced_bigram[,1]){
-#   reduced_bigram[num2,2] <- sum(unlist(bigrams)==bigram)
-#   num2 <- num2 + 1
-# }
-# colnames(reduced_bigram)[2] <- 'count'
-
-
-
-
-
-#Calculate coefficient 'd'(good-turing estimation)
-
-# get_d <- function(ngram, data){
-#   c <- data[data[,1]==ngram, 'count'][1]
-#   Nc <- data[data[,1]==ngram, 'Nc'][1]
-#   Nc1
-# }
-
-x <- unique(bigrams[,'count'])
-y <- unique(trigrams[,'count'])
-
-x[order(x)]
-y[order(y)]

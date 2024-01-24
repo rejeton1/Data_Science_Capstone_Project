@@ -332,3 +332,124 @@ trigram <- add_a(trigram)
 trigram <- add_cbi(trigram)
 trigram <- add_cuni(trigram)
 
+
+#calculate beta2(B2)
+add_B2 <- function(trigram){
+  col_num <- ncol(trigram)+1
+  for(i in 1:length(unique(trigram[,'w2']))){
+    unigram <- unique(trigram[,'w2'])[i]
+    match <- (trigram[,'w2']==unigram)
+    
+    nume <- sum(trigram[match, 'c*'])
+    denom <- sum(trigram[match, 'count'])
+    
+    trigram[match, col_num] = 1-(nume/denom)
+  }
+  colnames(trigram)[col_num] <- 'B2'
+  return(trigram)
+}
+
+
+
+#caculate alpha2(a2)
+add_a2 <- function(trigram){
+  col_num <- ncol(trigram)+1
+  for(i in 1:length(unique(trigram[,'w2']))[1]){
+    unigram <- unique(trigram[,'w2'])[i]
+    match1 <- trigram[,'w2']==unigram
+    match2 <- trigram[,'w2']!=unigram
+    
+
+    B <- trigram[match1, 'B2'][1]
+    denom <- sum(trigram[match2,'c*'])/sum(trigram[match2, 'count'])
+    trigram[match1, col_num] <- B/denom
+    }
+  colnames(trigram)[col_num] <- 'a2'
+  return(trigram)
+}
+
+trigram <- add_B2(trigram)
+trigram <- add_a2(trigram)
+
+unigram_freq <- matrix(ncol=2)
+unigram_freq <- as.data.frame(unigram_freq)
+colnames(unigram_freq) <- c('unigram', 'count')
+row_num <- 1
+for(unigram in unique(trigram[,'w3'])){
+  unigram_freq[row_num,1] <- unigram
+  unigram_freq[row_num,2] <- sum(trigram[,'w3']==unigram)
+  row_num <- row_num + 1
+}
+unigram_freq <- unigram_freq[order(unigram_freq[,2],decreasing = TRUE),]
+
+total_count <- sum(trigram[,'count'])
+
+
+#predict next word
+predict_next <- function(word1, word2){
+  word1 <- lemmatize_words(word1)
+  word2 <- lemmatize_words(word2)
+  
+  predictdata <- matrix(ncol=2)
+  predictdata <- as.data.frame(predictdata)
+  colnames(predictdata) <- c('word3', 'prob')
+  match <- trigram[,'w1']==word1 & trigram[,'w2']==word2
+  match2 <- trigram[,'w1']!=word1 & trigram[,'w2']==word2
+  match2data <- trigram[match2,]
+  match2data[,c('w1', 'w2')]
+  
+  match3 <- trigram[,'w2']==word2
+  match3data <- trigram[match3,]
+  num <- 1
+  
+  
+  if(sum(match)!=0){
+    for(i in which(match)){
+      predictdata[num, 'word3'] <- trigram[i, 'w3']
+      predictdata[num, 'prob'] <- trigram[i, 'c*']/trigram[i, 'cbi']
+      num <- num + 1
+    }
+    if(sum(match2)!=0){
+      for(t in which(match2)){
+        if(trigram[t, 'w3'] %in% predictdata[,1]){
+          next
+        }else{
+          predictdata[num, 'word3'] <- trigram[t, 'w3']
+          predictdata[num, 'prob'] <- trigram[t, 'a']*
+            (sum(match2data[match2data[,'w3']==trigram[t,'w3'], 'c*'])/trigram[t, 'cuni'])
+          num <- num + 1
+        }
+      }
+    }
+  }else if(sum(match)==0){
+    if(sum(match3)!=0){
+      for(q in which(match)){
+        predictdata[num, 'word3'] <- trigram[q, 'w3']
+        predictdata[num, 'prob'] <- (sum(match3data[match3data[,'w3']==trigram[q,'w3'], 'c*'])/trigram[t, 'cuni'])
+        num <- num + 1
+      }
+      for(word in head(unigram_freq,10)[,1]){
+        if(word %in% predictdata[,'word3']){
+          next
+        }else{
+          predictdata[num,'word3'] <- word
+          predictdata[num, 'prob'] <- trigram[trigram[,'w2']==word2,'a2'][1]*
+            (sum(trigram[trigram[,'w2']!=word2&trigram[,'w3']==word,'c*'])/total_count)
+        }
+        num <- num + 1
+      }
+      
+      #last case
+      
+      
+    }else if(sum(match3)==0){
+      for(word in head(unigram_freq,10)[,1]){
+        predictdata[num, 'word3'] <- word
+        predictdata[num, 'prob'] <- sum(trigram[trigram[,'w3']==word,'c*'])/total_count
+      }
+    }
+  }
+  predictdata <- predictdata[order(predictdata[,'prob'],decreasing = TRUE),]
+  return(predictdata)
+}
+

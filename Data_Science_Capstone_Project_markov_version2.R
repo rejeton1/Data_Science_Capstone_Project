@@ -6,6 +6,8 @@ set.seed(12345)
 
 #For sampling random lines, use function 'sample_lines' in LaF package.
 data <- sample_lines("./final/en_US/en_US.news.txt", n=1000)
+data2 <- sample_lines("./final/en_US/en_US.blogs.txt", n=1000)
+data <- c(data, data2)
 
 #removing '\r' end of each lines.
 data <- str_remove(data, pattern="\\r$")
@@ -423,10 +425,14 @@ predict_next <- function(word1, word2){
     }
   }else if(sum(match)==0){
     if(sum(match3)!=0){
-      for(q in which(match)){
-        predictdata[num, 'word3'] <- trigram[q, 'w3']
-        predictdata[num, 'prob'] <- (sum(match3data[match3data[,'w3']==trigram[q,'w3'], 'c*'])/trigram[t, 'cuni'])
-        num <- num + 1
+      for(q in which(match3)){
+        if(trigram[q, 'w3'] %in% predictdata[,'word3']){
+          next
+        }else{
+          predictdata[num, 'word3'] <- trigram[q, 'w3']
+          predictdata[num, 'prob'] <- (sum(match3data[match3data[,'w3']==trigram[q,'w3'], 'c*'])/trigram[q, 'cuni'])
+          num <- num + 1
+        }
       }
       for(word in head(unigram_freq,10)[,1]){
         if(word %in% predictdata[,'word3']){
@@ -446,6 +452,7 @@ predict_next <- function(word1, word2){
       for(word in head(unigram_freq,10)[,1]){
         predictdata[num, 'word3'] <- word
         predictdata[num, 'prob'] <- sum(trigram[trigram[,'w3']==word,'c*'])/total_count
+        num <- num + 1
       }
     }
   }

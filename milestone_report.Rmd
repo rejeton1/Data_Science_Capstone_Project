@@ -1,0 +1,160 @@
+---
+title: "Data Analysis and Modeling for Next Word Prediction App Production"
+author: "kosw"
+date: "2024-02-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Synopsis
+In this report, we deal with plan for producing application that recommends the most likely next word.
+For this, with dataset from swiftkey, exploratory analysis was conducted. After it, prediction model was constructed
+combining trigram model with Katz's backoff model that is for dealing with zero probability problem.
+Based on it, we described application that presents the 3 most likely words to users.
+
+
+
+## About Dataset
+Dataset we used in this report are from 'swiftkey', contain corpora obtained from blogs, news, twitters in each of 4 languages(German, English,
+Finnish, Russian). Among them, we used English dataset. The example of English news document is as follows.
+
+'The St. Louis plant had to close. It would die of old age. Workers had been making cars there since the onset of mass automotive production in the 1920s.'
+
+
+## Exploratory Data Analysis
+About 3 files(blogs, news, twitters), total number of documents(lines) is following.
+
+```{r, echo=FALSE, cache=TRUE, warning=FALSE}
+blog <- readLines("./final/en_US/en_US.blogs.txt")
+news <- readLines("./final/en_US/en_US.news.txt")
+twitter <- readLines("./final/en_US/en_US.twitter.txt")
+names <- c('blog', 'news', 'twitter')
+lengths <- c(length(blog), length(news), length(twitter))
+
+
+for(i in 1:3){
+  print(paste(paste(names[i], ':'), lengths[i]))
+}
+```
+
+
+
+
+And When we sample 1000 lines from each files, total frequency of unigrams(words) is
+```{r, echo=FALSE, cache=TRUE, warning=FALSE, message=FALSE}
+packages <- c('LaF', 'stringr', 'sentimentr', 'textstem', 'lexicon')
+for(package in packages){
+  if(!(package %in% installed.packages())){
+    install.packages(package)
+  }
+  library(package, character.only = TRUE)
+}
+
+set.seed(123)
+data1 <- sample_lines("./final/en_US/en_US.blogs.txt", n=1000)
+data2 <- sample_lines("./final/en_US/en_US.news.txt", n=1000)
+data3 <- sample_lines("./final/en_US/en_US.twitter.txt", n=1000)
+datas <- list(data1=data1, data2=data2, data3=data3)
+names <- c('blog', 'news', 'twitter')
+total_freq <- c()
+
+for(i in 1:length(datas)){
+  data <- datas[[i]]
+  data <- str_remove(data, pattern="\\r$")
+  data <- str_split(data, "\\s")
+  
+  data <- lapply(data, str_split, pattern="(?=[:punct:])")
+  data <- lapply(data, unlist)
+  data <- lapply(data, str_split, pattern="(?<=[:punct:])")
+  data <- lapply(data, unlist)
+  data <- lapply(data, str_split, pattern="(?=[$])")
+  data <- lapply(data, unlist)
+  data <- lapply(data, str_split, pattern="(?<=[$])")
+  data <- lapply(data, unlist)
+  data <- lapply(data, function(x) return(x[x !=""]))
+  
+  data <- lapply(data, str_split, pattern="(?=[0-9])")
+  data <- lapply(data, unlist)
+  data <- lapply(data, str_split, pattern="(?<=[0-9])")
+  data <- lapply(data, unlist)
+  data <- lapply(data, function(x) return(x[x !=""]))
+  
+  whether_punct <- lapply(data, grepl, pattern="([[:punct:]])")
+  whether_punct <- lapply(whether_punct, function(x) x = !x)
+
+  for(ii in 1:length(data)){
+    data[[ii]] <- data[[ii]][whether_punct[[ii]]]
+  }
+  
+  #removing numbers
+  whether_num <- lapply(data, grepl, pattern="([0-9])")
+  whether_num <- lapply(whether_num, function(x) x = !x)
+  
+  for(iii in 1:length(data)){
+    data[[iii]] <- data[[iii]][whether_num[[iii]]]
+  }
+  
+  data <- lapply(data, tolower)
+
+
+  pro1 <- lexicon::profanity_alvarez
+  pro2 <- lexicon::profanity_banned
+  pro3 <- lexicon::profanity_arr_bad
+  pro4 <- lexicon::profanity_racist
+  pro5 <- lexicon::profanity_zac_anger
+
+  profanity <- union(union(union(pro1, pro2), union(pro3, pro4)), pro5)
+
+  #Profanity counting
+  firstcounting <- sum(profanity(unlist(data), profanity)$profanity_count)
+
+  #Removing profanity
+  remove_profanity <- function(text, profanity){
+    for(word in profanity){
+      matching <- grep(pattern=word, x=text, fixed = TRUE)
+      if(length(matching) >= 1){
+        text <- text[-matching]
+      }
+    }
+    return(text)
+  }
+
+  data <- lapply(data, remove_profanity, profanity = profanity)
+
+
+  #Profanity 'Re'counting
+  recounting <- sum(profanity(unlist(data), profanity)$profanity_count)
+
+  #profanity that wasn't removed finding and adding it to lexicon and remove again with new lexicon
+  if(recounting != 0){
+    profanity_index <- which(profanity(unlist(data), profanity)$profanity_count != 0)
+    unremoved_profanity <- unlist(data)[profanity_index]
+    unremoved_profanity
+    profanity[length(profanity)+seq(from=1, by=1, length.out=length(unremoved_profanity))] <- unremoved_profanity
+
+    data <- lapply(data, remove_profanity, profanity = profanity)
+  }
+
+  data <- lapply(data, lemmatize_words)
+  
+
+  total_freq[i] <- length(unlist(data))
+}
+
+for(t in 1:3){
+  print(paste(paste(names[t], ":"), total_freq[t]))
+}
+
+```
+
+
+
+
+## Prediction Model
+### Trigram(3-gram) model
+### Katz's Backoff Model
+
+## About Application

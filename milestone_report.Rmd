@@ -60,6 +60,10 @@ data3 <- sample_lines("./final/en_US/en_US.twitter.txt", n=1000)
 datas <- list(data1=data1, data2=data2, data3=data3)
 names <- c('blog', 'news', 'twitter')
 total_freq <- c()
+uni_blog <- c()
+uni_news <- c()
+uni_twitter <- c()
+uni_list <- list(uni_blog=uni_blog, uni_news=uni_news, uni_twitter=uni_twitter)
 
 for(i in 1:length(datas)){
   data <- datas[[i]]
@@ -142,6 +146,8 @@ for(i in 1:length(datas)){
   
 
   total_freq[i] <- length(unlist(data))
+  
+  uni_list[[i]] <- data
 }
 
 for(t in 1:3){
@@ -150,7 +156,185 @@ for(t in 1:3){
 
 ```
 
+The distributions of the number of tokens in each lines in each of 3 files is following.
+```{r, echo=FALSE, cache=TRUE}
+num_token <- list()
 
+for(q in 1:length(uni_list)){
+  num_token[[q]] <- lapply(uni_list[[q]], length)
+}
+
+par(mfrow=c(1, 3))
+for(r in 1:length(num_token)){
+  hist(unlist(num_token[[r]]), main=paste("Number of tokens in", names[r]), xlab = 'Number of tokens',
+       breaks = unlist(num_token[[1]])[which.max(unlist(num_token[[r]]))])
+}
+
+```
+And maximum length of line is
+```{r, echo=FALSE, cache=TRUE}
+for(s in 1:length(uni_list)){
+  print(paste(paste(names[s], ":"), unlist(num_token[[s]])[which.max(unlist(num_token[[s]]))]))
+}
+
+```
+
+The most frequent unigrams in each of 3 files is
+```{r, echo=FALSE, cache=TRUE}
+#Make word frequency data
+word_frequency <- matrix(ncol=9)
+word_frequency <- as.data.frame(word_frequency)
+
+for(u in 1:length(uni_list)){
+  num <- 1
+  for(word in unique(unlist(uni_list[[u]]))){
+    word_frequency[num, 3*(u-1)+1] <- names[u]
+    word_frequency[num, 3*(u-1)+2] <- word
+    word_frequency[num, 3*(u-1)+3] <- sum(unlist(uni_list[[u]])==word)
+    num <- num + 1
+  }
+}
+
+
+par(mfrow=c(1, 3))
+for(t in 1:length(uni_list)){
+  word_frequency <- word_frequency[order(word_frequency[,3*t],decreasing = TRUE),]
+  barplot(head(word_frequency[,3*t],10), names.arg = head(word_frequency[,3*t-1],10),
+          main=paste('Top 10 word freuency in', names[t]), cex.names = 0.6)
+}
+```
+We can see that most of frequent words are stopwords(e.g.,'the', 'a')
+So, let's check the frequency again without stopwords!
+
+```{r, echo=FALSE, cache=TRUE}
+if(!('stopwords' %in% installed.packages())){
+  install.packages('stopwords')
+}
+library(stopwords)
+stopwords <- c(stopwords(), "re", "d", "ll", "t", "s", "m", "ve", "us", "don", "st", "th", "u", "didn")
+stopwords <- stopwords[-grep(pattern="\'", stopwords)]
+
+uni_list1 <- uni_list
+
+remove_stopword <- function(text, stopword){
+  for(word in stopword){
+    matching <- grep(pattern=paste("^", word, "$", sep=""), x=text)
+    if(length(matching) >= 1){
+      text <- text[-matching]
+    }
+  }
+  return(text)
+}
+
+for(v in 1:length(uni_list1)){
+  uni_list1[[v]] <- lapply(uni_list1[[v]], remove_stopword, stopword = stopwords)
+}
+
+
+#Make word frequency data
+word_frequency1 <- matrix(ncol=9)
+word_frequency1 <- as.data.frame(word_frequency1)
+
+for(w in 1:length(uni_list1)){
+  num <- 1
+  for(word in unique(unlist(uni_list1[[w]]))){
+    word_frequency1[num, 3*(w-1)+1] <- names[w]
+    word_frequency1[num, 3*(w-1)+2] <- word
+    word_frequency1[num, 3*(w-1)+3] <- sum(unlist(uni_list1[[w]])==word)
+    num <- num + 1
+  }
+}
+
+
+par(mfrow=c(1, 3))
+for(x in 1:length(uni_list)){
+  word_frequency1 <- word_frequency1[order(word_frequency1[,3*x],decreasing = TRUE),]
+  barplot(head(word_frequency1[,3*x],10), names.arg = head(word_frequency1[,3*x-1],10),
+          main=paste('Top 10 word freuency in', names[t]), cex.names = 1)
+}
+```
+And let's check the frequency of bigrams!
+```{r, echo=FALSE, cache=TRUE}
+make_bigrams <- function(text){
+  tokens <- c()
+  for(i in 1:length(text)-1){
+    tokens[i] <- paste(text[i], text[i+1])
+  }
+  tokens
+}
+
+bi_blog <- c()
+bi_news <- c()
+bi_twitter <- c()
+bi_list <- list(bi_blog=bi_blog, bi_news=bi_news, bi_twitter=bi_twitter)
+
+for(aa in 1:length(uni_list)){
+  bi_list[[aa]] <- lapply(uni_list[[aa]], make_bigrams)
+}
+
+#Make bigram frequency data
+bi_frequency <- matrix(ncol=9)
+bi_frequency <- as.data.frame(bi_frequency)
+
+for(ab in 1:length(bi_list)){
+  num <- 1
+  for(bigram in unique(unlist(bi_list[[ab]]))){
+    bi_frequency[num, 3*(ab-1)+1] <- names[ab]
+    bi_frequency[num, 3*(ab-1)+2] <- bigram
+    bi_frequency[num, 3*(ab-1)+3] <- sum(unlist(bi_list[[ab]])==bigram)
+    num <- num + 1
+  }
+}
+
+
+par(mfrow=c(1, 3))
+for(ac in 1:length(bi_list)){
+  bi_frequency <- bi_frequency[order(bi_frequency[,3*ac],decreasing = TRUE),]
+  barplot(head(bi_frequency[,3*ac],5), names.arg = head(bi_frequency[,3*ac-1],5),
+          main=paste('Top 5 bigram frequency in', names[ac]), cex.names = 1)
+}
+```
+Also check in trigram.
+```{r}
+make_trigrams <- function(text){
+  tokens <- c()
+  for(i in 1:length(text)-2){
+    tokens[i] <- paste(text[i], text[i+1], text[i+2])
+  }
+  tokens
+}
+
+tri_blog <- c()
+tri_news <- c()
+tri_twitter <- c()
+tri_list <- list(tri_blog=tri_blog, tri_news=tri_news, tri_twitter=tri_twitter)
+
+for(ad in 1:length(uni_list)){
+  tri_list[[ad]] <- lapply(uni_list[[ad]], make_trigrams)
+}
+
+#Make trigram frequency data
+tri_frequency <- matrix(ncol=9)
+tri_frequency <- as.data.frame(tri_frequency)
+
+for(ae in 1:length(tri_list)){
+  num <- 1
+  for(trigram in unique(unlist(tri_list[[ae]]))){
+    tri_frequency[num, 3*(ae-1)+1] <- names[ae]
+    tri_frequency[num, 3*(ae-1)+2] <- trigram
+    tri_frequency[num, 3*(ae-1)+3] <- sum(unlist(tri_list[[ae]])==trigram)
+    num <- num + 1
+  }
+}
+
+
+par(mfrow=c(1, 3))
+for(af in 1:length(tri_list)){
+  tri_frequency <- tri_frequency[order(tri_frequency[,3*af],decreasing = TRUE),]
+  barplot(head(tri_frequency[,3*af],5), names.arg = head(tri_frequency[,3*af-1],5),
+          main=paste('Top 5 trigram frequency in', names[af]), cex.names = 1)
+}
+```
 
 
 ## Prediction Model

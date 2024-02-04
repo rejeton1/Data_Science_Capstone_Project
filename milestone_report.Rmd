@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo=FALSE, cache=TRUE, fig.height=4, fig.width=10)
 ```
 
 ## Synopsis
@@ -19,13 +19,13 @@ Based on it, we described application that presents the 3 most likely words to u
 
 ## About Dataset
 Dataset we used in this report are from 'swiftkey', contain corpora obtained from blogs, news, twitters in each of 4 languages(German, English,
-Finnish, Russian). Among them, we used English dataset. The example of English news document is as follows.
+Finnish, Russian). Among them, we used English dataset. An example of English news document is as follows.
 
 'The St. Louis plant had to close. It would die of old age. Workers had been making cars there since the onset of mass automotive production in the 1920s.'
 
 
 ## Exploratory Data Analysis
-About 3 files(blogs, news, twitters), total number of documents(lines) is following.
+In 3 files(blogs, news, twitters), total number of documents(lines) is following.
 
 ```{r, echo=FALSE, cache=TRUE, warning=FALSE}
 blog <- readLines("./final/en_US/en_US.blogs.txt")
@@ -157,7 +157,52 @@ for(t in 1:3){
   print(paste(paste(names[t], ":"), total_freq[t]))
 }
 
+print(paste('total :', sum(total_freq)))
+
 ```
+And when we sample 1000 lines in each of 3 files, the size of vocabulary in each file and total is
+```{r}
+for(as in 1:length(uni_list)){
+  x <- unlist(uni_list[[as]])
+  print(paste(paste(names[as], ":"), length(unique(x))))
+}
+
+y <- unlist(uni_list)
+print(paste('total :', length(unique(y))))
+```
+So, how many words in vocabulary make up most of the frequency?
+```{r}
+unigram_freq <- matrix(ncol=2)
+unigram_freq <- as.data.frame(unigram_freq)
+colnames(unigram_freq) <- c('word', 'freq')
+num <- 1
+
+for(unigram in unique(unlist(uni_list))){
+  unigram_freq[num,1] <- unigram
+  unigram_freq[num,2] <- sum(unlist(uni_list)==unigram)
+  num <- num + 1
+}
+
+unigram_freq <- unigram_freq[order(unigram_freq[,2], decreasing = TRUE),]
+
+for(aw in 1:dim(unigram_freq)[1]){
+  unigram_freq[aw,3] <- 100*sum(unigram_freq[1:aw,2])/length(unlist(uni_list))
+}
+
+colnames(unigram_freq)[3] <- 'cumul'
+
+length(unigram_freq[,1])
+
+percents <- c(50, 60, 70, 80, 90)
+for(percent in percents){
+  print(paste(paste(paste(paste(paste(which(unigram_freq[,3] >= percent)[1],'words among'), length(unigram_freq[,1])),  ' words make up'), percent),'% of the total frequency'))
+}
+
+```
+
+
+This result suggests chance to improvement of runtime efficiency by reducing the size of vocabulary.
+
 
 The distributions of the number of tokens in each lines in each of 3 files is following.
 ```{r, echo=FALSE, cache=TRUE}
@@ -167,6 +212,7 @@ for(q in 1:length(uni_list)){
   num_token[[q]] <- lapply(uni_list[[q]], length)
 }
 
+
 par(mfrow=c(1, 3))
 for(r in 1:length(num_token)){
   hist(unlist(num_token[[r]]), main=paste("Number of tokens in", names[r]), xlab = 'Number of tokens',
@@ -174,6 +220,7 @@ for(r in 1:length(num_token)){
 }
 
 ```
+<br/>
 And maximum length of line is
 ```{r, echo=FALSE, cache=TRUE}
 for(s in 1:length(uni_list)){
@@ -203,11 +250,12 @@ par(mfrow=c(1, 3))
 for(t in 1:length(uni_list)){
   word_frequency <- word_frequency[order(word_frequency[,3*t],decreasing = TRUE),]
   barplot(head(word_frequency[,3*t],10), names.arg = head(word_frequency[,3*t-1],10),
-          main=paste('Top 10 word freuency in', names[t]), cex.names = 0.6)
+          main=paste('Top 10 word freuency in', names[t]), cex.names = 0.8)
 }
 ```
-We can see that most of frequent words are stopwords(e.g.,'the', 'a')
-So, let's check the frequency again without stopwords!
+<br/>
+We can see that most of frequent words are stopwords(e.g.,'the', 'a').
+ So, let's check the frequency again without stopwords!
 
 ```{r, echo=FALSE, cache=TRUE}
 if(!('stopwords' %in% installed.packages())){
@@ -253,9 +301,10 @@ par(mfrow=c(1, 3))
 for(x in 1:length(uni_list)){
   word_frequency1 <- word_frequency1[order(word_frequency1[,3*x],decreasing = TRUE),]
   barplot(head(word_frequency1[,3*x],10), names.arg = head(word_frequency1[,3*x-1],10),
-          main=paste('Top 10 word freuency in', names[t]), cex.names = 1)
+          main=paste('Top 10 non-stopword freuency in', names[x]), cex.names = 0.6)
 }
 ```
+<br/>
 And let's check the frequency of bigrams!
 ```{r, echo=FALSE, cache=TRUE}
 make_bigrams <- function(text){
@@ -297,8 +346,10 @@ for(ac in 1:length(bi_list)){
           main=paste('Top 5 bigram frequency in', names[ac]), cex.names = 1)
 }
 ```
+<br/>
 Also check in trigram.
-```{r}
+<br/>
+```{r, echo=FALSE, cache=TRUE}
 make_trigrams <- function(text){
   tokens <- c()
   for(i in 1:length(text)-2){
@@ -335,60 +386,78 @@ par(mfrow=c(1, 3))
 for(af in 1:length(tri_list)){
   tri_frequency <- tri_frequency[order(tri_frequency[,3*af],decreasing = TRUE),]
   barplot(head(tri_frequency[,3*af],5), names.arg = head(tri_frequency[,3*af-1],5),
-          main=paste('Top 5 trigram frequency in', names[af]), cex.names = 1)
+          main=paste('Top 5 trigram frequency in', names[af]), cex.names = 0.8)
 }
 ```
 
 
 ## Prediction Model
 ### Trigram(3-gram) model
-'n-gram model'is that the probability of nth word depends not on all of the previous words, but on previous (n-1) words.
-For example, there are 5 words, 'a', 'b', 'c', 'd', 'e', and document 'abcde', the probability that 'e' occurs after 'abcd' can be expressed as 'P(e|abcd) = P(e|cd)'. Also, probability that 'd' occurs after 'abc' can be expressed as 'P(d|bc)'.
+'n-gram model' is model assuming that the probability of nth word depends not on all of the previous words, but on previous (n-1) words.
+For example, there are 5 words, 'a', 'b', 'c', 'd', 'e', and document 'abcde', the probability that 'e' occurs after 'abcd' can be expressed as 
+<br/>
+'P(e|abcd) = P(e|cd)'. 
+<br/>
+Also, probability that 'd' occurs after 'abc' can be expressed as 'P(d|bc)'.
 
-Among various n-gram model depending on the value of n, we will use 'trigram(3-gram) model' for app production. So we will calculate the probability that the next word is 'w3' using previous 2 words(w1w2).
+Among various n-gram model according to the value of n, we will use 'trigram(3-gram) model' for app production. So we will calculate the probability that the next word is 'w3' using previous 2 words(w1w2).
+<br/>
 ### Katz's Backoff Model
-Even though there are a massive kind of n-grams that can occur in real world, there is a problem that zero probability is given to n-grams that have not seen in training set. To deal with this problem, we will use Katz's backoff model along with the trigram model. This model estimate the probability of unseen n-grams by distributing the probability mass taken from seen n-grams in training set. The specific method of estimation is following.
+Even though there are a massive kind of n-grams that can occur in real world, there is a problem that zero probability is given to n-grams that have not seen in training set. To deal with this problem, we will use 'Katz's backoff model' along with the trigram model. This model estimate the probability of unseen n-grams by distributing the probability mass taken from seen n-grams in training set. The specific method of estimation is following.
 
-
+<br/>
 When there is a 3-gram, 'w1w2'w3, where 'w1w2' is determined, we can divide the number of cases into 3 in according to whether the any 'w1w2w3' exists in the training set.
 
 
 When 'w1w2' is determined,(e.g. 'ab')
+<br/>
 1. Case that any kind of 'w1w2w3' exists in the training set.(in form of 'abc')
+<br/>
 2. Case that any kind of 'w1w2w3' does not exist, but 'w2w3' exists.(in form of 'dbc')
+<br/>
 3. Case that even 'w2w3' does not exist.(in form of 'dec')
 
 In each case, probability Ps(w3|w1w2) is calculated as follows.(Ps() means 'estimated probability')
 
 
 *Ps(A|B) = d x P(A|B)
+<br/>
 P(A|B) = c(A&B)/c(B)
 (where c(k) is frequency of k in training set.)
-
+<br/>
+<br/>
 1. Case that any kind of 'w1w2w3' exists in the training set.(in form of 'abc')
 
 1-1) About 'w3' that 'w1w2w3' exists when 'w1w2' is determined(any 'c' of 'abc')
+<br/>
 Ps(w3|w1w2) = d x P(w3|w1w2)
-Multipying by constant is for taking some probability mass from 'w1w2w3' existing in training set. That is called 'discounting', constant 'd' is refered to as 'discounting rate'
+<br/>
+Multipying by constant is for taking some probability mass from 'w1w2w3' existing in training set. That is called 'discounting', and constant 'd' is refered to as 'discounting rate'
 
 1-2) About 'w3' in the rest of vocabulary that 'w1w2w3' does not exist, but 'w2w3' exist with other 'w1'(any 'c' of 'dbc')
+<br/>
 Ps(w3|w1w2) = a x Ps(w3|w2)
+<br/>
 It means redistribution of probability mass taken from 1-1) to 'w3' in case 1-2) in according to proportion of 'Ps(w3|w2)'
-
+<br/><br/>
 2. Case that any kind of 'w1w2w3' does not exist, but 'w2w3' exists.(in form of 'dbc')
 
 2-1) About 'w3' that have 'w2w3'(in form of 'dbc')
+<br/>
 Ps(w3|w1w2) is estimated to be Ps(w3|w2)
 
 2-2) About 'w3' in the rest of vocabulary that does not have 'w2w3'(in form of 'dec')
+<br/>
 Ps(w3|w1w2) = a x Ps(w3)
+<br/>
 It also means redistribution of probability mass taken from 2-1) to 'w3' in case 2-2) in according to proportion of 'Ps(w3|w2)'
-
+<br/><br/>
 3. Case that even 'w2w3' does not exist.(in form of 'dec')
+<br/>
 Ps(w3|w1w2) is estimated to be Ps(w3).
 
-
-In conclusion, by combining 'trigram model' and 'Katz's backoff model, the probability of next word is predicted by estimating the probability of seen and unseen 3-grams when the previous 2 word is given.
+<br/>
+In conclusion, by combining 'trigram model' and 'Katz's backoff model', the next word is predicted by estimating the probability of seen and unseen 3-grams when the previous 2 word is given.
 
 
 

@@ -70,6 +70,9 @@ for(i in 1:length(datas)){
   data <- str_remove(data, pattern="\\r$")
   data <- str_split(data, "\\s")
   
+  data <- lapply(data, tolower)
+  data <- lapply(data, lemmatize_words)
+  
   data <- lapply(data, str_split, pattern="(?=[:punct:])")
   data <- lapply(data, unlist)
   data <- lapply(data, str_split, pattern="(?<=[:punct:])")
@@ -101,7 +104,7 @@ for(i in 1:length(datas)){
     data[[iii]] <- data[[iii]][whether_num[[iii]]]
   }
   
-  data <- lapply(data, tolower)
+  
 
 
   pro1 <- lexicon::profanity_alvarez
@@ -142,8 +145,8 @@ for(i in 1:length(datas)){
     data <- lapply(data, remove_profanity, profanity = profanity)
   }
 
-  data <- lapply(data, lemmatize_words)
   
+  data <- lapply(data, lemmatize_words)
 
   total_freq[i] <- length(unlist(data))
   
@@ -339,6 +342,77 @@ for(af in 1:length(tri_list)){
 
 ## Prediction Model
 ### Trigram(3-gram) model
+'n-gram model'is that the probability of nth word depends not on all of the previous words, but on previous (n-1) words.
+For example, there are 5 words, 'a', 'b', 'c', 'd', 'e', and document 'abcde', the probability that 'e' occurs after 'abcd' can be expressed as 'P(e|abcd) = P(e|cd)'. Also, probability that 'd' occurs after 'abc' can be expressed as 'P(d|bc)'.
+
+Among various n-gram model depending on the value of n, we will use 'trigram(3-gram) model' for app production. So we will calculate the probability that the next word is 'w3' using previous 2 words(w1w2).
 ### Katz's Backoff Model
+Even though there are a massive kind of n-grams that can occur in real world, there is a problem that zero probability is given to n-grams that have not seen in training set. To deal with this problem, we will use Katz's backoff model along with the trigram model. This model estimate the probability of unseen n-grams by distributing the probability mass taken from seen n-grams in training set. The specific method of estimation is following.
+
+
+When there is a 3-gram, 'w1w2'w3, where 'w1w2' is determined, we can divide the number of cases into 3 in according to whether the any 'w1w2w3' exists in the training set.
+
+
+When 'w1w2' is determined,(e.g. 'ab')
+1. Case that any kind of 'w1w2w3' exists in the training set.(in form of 'abc')
+2. Case that any kind of 'w1w2w3' does not exist, but 'w2w3' exists.(in form of 'dbc')
+3. Case that even 'w2w3' does not exist.(in form of 'dec')
+
+In each case, probability Ps(w3|w1w2) is calculated as follows.(Ps() means 'estimated probability')
+
+
+*Ps(A|B) = d x P(A|B)
+P(A|B) = c(A&B)/c(B)
+(where c(k) is frequency of k in training set.)
+
+1. Case that any kind of 'w1w2w3' exists in the training set.(in form of 'abc')
+
+1-1) About 'w3' that 'w1w2w3' exists when 'w1w2' is determined(any 'c' of 'abc')
+Ps(w3|w1w2) = d x P(w3|w1w2)
+Multipying by constant is for taking some probability mass from 'w1w2w3' existing in training set. That is called 'discounting', constant 'd' is refered to as 'discounting rate'
+
+1-2) About 'w3' in the rest of vocabulary that 'w1w2w3' does not exist, but 'w2w3' exist with other 'w1'(any 'c' of 'dbc')
+Ps(w3|w1w2) = a x Ps(w3|w2)
+It means redistribution of probability mass taken from 1-1) to 'w3' in case 1-2) in according to proportion of 'Ps(w3|w2)'
+
+2. Case that any kind of 'w1w2w3' does not exist, but 'w2w3' exists.(in form of 'dbc')
+
+2-1) About 'w3' that have 'w2w3'(in form of 'dbc')
+Ps(w3|w1w2) is estimated to be Ps(w3|w2)
+
+2-2) About 'w3' in the rest of vocabulary that does not have 'w2w3'(in form of 'dec')
+Ps(w3|w1w2) = a x Ps(w3)
+It also means redistribution of probability mass taken from 2-1) to 'w3' in case 2-2) in according to proportion of 'Ps(w3|w2)'
+
+3. Case that even 'w2w3' does not exist.(in form of 'dec')
+Ps(w3|w1w2) is estimated to be Ps(w3).
+
+
+In conclusion, by combining 'trigram model' and 'Katz's backoff model, the probability of next word is predicted by estimating the probability of seen and unseen 3-grams when the previous 2 word is given.
+
+
+
 
 ## About Application
+Our application presents the most likely word as next word based on previous two words while users are typing. Specific operation process is following.
+
+1. The user types the text.
+2. Texts typed are preprocessed so that algorithm can recognize them.
+3. The 3 most likely words are predicted and presented to user based on previous 2 words.
+4. If user select predicted word, the word is typed on the screen automatically.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

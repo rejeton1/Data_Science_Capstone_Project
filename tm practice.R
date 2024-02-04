@@ -11,9 +11,11 @@ corpus <- tm_map(corpus, content_transformer(tolower))
 
 corpus <- tm_map(corpus, removePunctuation)
 
+corpus <- tm_map(corpus, removeNumbers)
+
 corpus <- tm_map(corpus, stripWhitespace)
 
-corpus <- tm_map(corpus, removeNumbers)
+
 
 
 pro1 <- lexicon::profanity_banned
@@ -32,13 +34,23 @@ corpusstemmed <- tm_map(corpus, stemDocument)
 #searching specific string in corpus
 filtered.corpus <- tm_filter(corpus, FUN = function(x) any(grep("of the", content(x))))
 
+corpus <- tm_map(corpus, PlainTextDocument)
 
 #n-gram create
 dataforngrams <- data.frame(text=sapply(corpus, as.character), stringsAsFactors = FALSE)
-# unigramToken
+unigramtoken <- apply(dataforngrams, 1, tokenize_ngrams, n=1, n_min=1)
+bigramtoken <- apply(dataforngrams, 1, tokenize_ngrams, n=2, n_min=2)
+trigramtoken <- apply(dataforngrams, 1, tokenize_ngrams, n=3, n_min=3)
 
-Sys.setenv('JAVA_HOME'="C:/Program Files (x86)/Java/jre-1.8/") 
+unigrams <- data.frame(table(unlist(unigramtoken)))
+unigrams <- unigrams[order(unigrams[,2], decreasing = TRUE),]
+colnames(unigrams) <- c('Word', 'Frequency')
 
+bigrams <- data.frame(table(unlist(bigramtoken)))
+bigrams <- bigrams[order(bigrams[,2], decreasing = TRUE),]
+colnames(bigrams) <- c('Word', 'Frequency')
 
-
+trigrams <- data.frame(table(unlist(trigramtoken)))
+trigrams <- trigrams[order(trigrams[,2], decreasing = TRUE),]
+colnames(trigrams) <- c('Word', 'Frequency')
 

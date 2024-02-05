@@ -1,5 +1,5 @@
-install.packages(c('tm','readr','stringi','RWeka','ggplot2','wordcloud','SnowballC','gridExtra', 'sentimentr'))
-for(package in c('tm','readr','stringi','RWeka','ggplot2','wordcloud','SnowballC','gridExtra', 'sentimentr')){
+install.packages(c('tm','readr','stringi','tokenizers','ggplot2','wordcloud','SnowballC','gridExtra', 'sentimentr'))
+for(package in c('tm','readr','stringi','tokenizers','ggplot2','wordcloud','SnowballC','gridExtra', 'sentimentr')){
   library(package, character.only = TRUE)
 }
 
@@ -53,4 +53,26 @@ colnames(bigrams) <- c('Word', 'Frequency')
 trigrams <- data.frame(table(unlist(trigramtoken)))
 trigrams <- trigrams[order(trigrams[,2], decreasing = TRUE),]
 colnames(trigrams) <- c('Word', 'Frequency')
+
+#make wordcloud
+dtmcorpus <- TermDocumentMatrix(corpus)
+corpusmatrix <- as.matrix(dtmcorpus)
+sortedmatrix <- sort(rowSums(corpusmatrix), decreasing = TRUE)
+dfcorpus <- data.frame(word=names(sortedmatrix), freq=sortedmatrix)
+wordcloud(words = dfcorpus$word, freq = dfcorpus$freq, min.freq = 1, max.words = 50, random.order = FALSE,
+          rot.per = 0.35, colors = brewer.pal(n=8, name='Dark2'))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

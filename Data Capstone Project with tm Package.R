@@ -10,9 +10,9 @@ for(package in packages){
 }
 
 #Data install from blog, news, twitter
-data1 <- readLines("./final/en_US/en_US.blogs.txt", n=300)
-data2 <- readLines("./final/en_US/en_US.news.txt", n=300)
-data3 <- readLines("./final/en_US/en_US.twitter.txt", n=300)
+data1 <- readLines("./final/en_US/en_US.blogs.txt", n=5000)
+data2 <- readLines("./final/en_US/en_US.news.txt", n=5000)
+data3 <- readLines("./final/en_US/en_US.twitter.txt", n=5000)
 
 data <- c(data1, data2, data3)
 
@@ -92,6 +92,11 @@ twoGramTable <- twoGramTable %>% mutate(firstTerms=str_split_i(word, "\\s", i=1)
   select(frequency:lastTerm)
 twoGramTable <- as.data.table(twoGramTable)
 
+
+oneGramTable <- unigrams
+colnames(oneGramTable) <- c('lastTerm', 'frequency')
+oneGramTable <- as.data.table(oneGramTable)
+
 #Modeling
 #Is there any package dealing with katz's backoff model?
 #https://github.com/ThachNgocTran/KatzBackOffModelImplementationInR/blob/master/calculateDiscount.R
@@ -104,7 +109,6 @@ calcLeftOverProb = function(lastTerm, frequency, discount){
 }
 
 
-createThreeGramTableExtended = function(){
   threeGramTable$discount = rep(1, nrow(threeGramTable))
   
   for(i in 5:1){
@@ -125,8 +129,10 @@ createThreeGramTableExtended = function(){
   
   # We now have two important objects: threeGramTable, threeGramTable_leftOverProb
   # ...
-}
-
+threeGramTable <- mutate(threeGramTable, c_est=frequency*discount)
+threeGramTable <- threeGramTable[order(-c_est)]
+  
+  
 ##########################################################################################################
 # Calculate the remaining probability (thanks to discounting...).
 # Given that the input is grouped based on firstTerms already.
@@ -136,8 +142,8 @@ createThreeGramTableExtended = function(){
 #add discount column to twogramtable
 twoGramTable$discount = rep(1, nrow(twoGramTable))
 
-for(i in 5:1){
-  currRTimes = i
+for(ii in 5:1){
+  currRTimes = ii
   nextRTimes = currRTimes + 1
   
   currN = nrow(twoGramTable[frequency == currRTimes])
@@ -148,11 +154,27 @@ for(i in 5:1){
   # the beauty of "data.table"!
   twoGramTable[frequency == currRTimes, discount := currd]
 }
+twoGramTable <- mutate(twoGramTable, c_est=frequency*discount)
+twoGramTable <- twoGramTable[order(-c_est)]
 ##########################################
-#add discount column to ongramtable
+#add discount column to onegramtable
+  oneGramTable$discount = rep(1, nrow(oneGramTable))
+  
+  for(iii in 5:1){
+    currRTimes = iii
+    nextRTimes = currRTimes + 1
+    
+    currN = nrow(oneGramTable[frequency == currRTimes])
+    nextN = nrow(oneGramTable[frequency == nextRTimes])
+    
+    currd = (nextRTimes / currRTimes) * (nextN / currN) # assumption: 0 < d < 1
+    
+    # the beauty of "data.table"!
+    oneGramTable[frequency == currRTimes, discount := currd]
+  }
 
-
-
+oneGramTable <- mutate(oneGramTable, c_est=frequency*discount)
+oneGramTable <- oneGramTable[order(-c_est)]
 
 ##########################################################################################################
 # This function is used to get the probability of a given text, using Katz Backoff (with Good-Turing Discounting).
@@ -268,4 +290,44 @@ getLastTerms = function(inputString, num = 3){
   tempWords = words[from:to]
   
   paste(tempWords, collapse="_")
+}
+  
+  
+  
+  
+#########################################
+#Make predict function
+
+predictnextword2 <- function(inputtext){
+  inputtext_processed1 <- getLastTerms(inputtext, n=2)
+  inputtext_processed2 <- getLastTerms(inputtext, n=1)
+  
+  threeGramTable1 <- threeGramTable[firstTerms==inputtext_processed1]
+  
+  if(dim(threeGramTable1)[1] >= 3){
+    threeprob <- threeGramTable1[1:3,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+  }else{
+    threeprob <- threeGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+  }
+
+  twoGramTable1 <- twoGramTable[firstTerms==inputtext_processed2 & !(lastTerm %in% threeGramTable1$lastTerm)]
+  
+  if(dim(twoGramTable1)[1] >= 3){
+    twoprob <- twoGramTable1[1:3,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+  }else{
+    twoprob <- twoGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+  }
+
+  oneGramTable1 <- oneGramTable[!(lastTerm %in% twoGramTable1$lastTerm) & !(lastTerm %in% threeGramTable1$lastTerm)]
+  
+  if(dim(oneGramTable1)[1] >= 3){
+    oneprob <- oneGramTable1[1:3,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+  }else{
+    oneprob <- oneGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+  }
+    
+  finalprob <- rbind(threeprob, twoprob, oneprob)
+  finalprob <- finalprob[order(-probability)]
+  
+  return(finalprob)
 }

@@ -10,19 +10,21 @@ for(package in packages){
 }
 
 #Data install from blog, news, twitter
-data1 <- readLines("./final/en_US/en_US.blogs.txt", n=30000)
-data2 <- readLines("./final/en_US/en_US.news.txt", n=30000)
-data3 <- readLines("./final/en_US/en_US.twitter.txt", n=30000)
+data1 <- readLines("./final/en_US/en_US.blogs.txt", n=10000)
+data2 <- readLines("./final/en_US/en_US.news.txt", n=10000)
+data3 <- readLines("./final/en_US/en_US.twitter.txt", n=10000)
 
 data <- c(data1, data2, data3)
 
-#remove foreign language
 
 
 #Make a corpus
 corpus <- VCorpus(VectorSource(data))
 
 #Data preprocessing
+
+
+
 ##1. to lower
 corpus <- tm_map(corpus, content_transformer(tolower))
 #tm_map allow function that is applied to vector or textdocument also to be able to applied to corpus.
@@ -52,6 +54,15 @@ corpus <- tm_map(corpus, stripWhitespace)
 corpus <- tm_map(corpus, content_transformer(lemmatize_strings))
 #content_transformer allow function applied to only vector to be able to be applied to textdocument.
 #after when i need, i can modify the lemmatize dictionary by using hash_lemmas(lexicon)
+
+preprocess_corpus <- function(corpus){
+  corpus <- tm_map(corpus, content_transformer(tolower))
+  corpus <- tm_map(corpus, removePunctuation)
+  corpus <- tm_map(corpus, removeNumbers)
+  corpus <- tm_map(corpus, removeWords, profanity)
+  corpus <- tm_map(corpus, stripWhitespace)
+  corpus <- tm_map(corpus, content_transformer(lemmatize_strings))
+}
 
 #Check the corpus after preprocess
 for(i in 1:6){
@@ -353,10 +364,11 @@ pair_frequency_table <- pair_frequency_table[frequency >= 3][order(-frequency)]
 ####################################
 #add MI column
 total_freq_sixgram <- dim(sixgramdatatable)[1]*5
+total_freq_onegram <- sum(oneGramTable$frequency)
 calculate_MI <- function(pairs, freq){
   pab <- freq/total_freq_sixgram
-  pa <- oneGramTable[lastTerm==str_split_i(pairs, "\\s", 1), frequency]/sum(oneGramTable$frequency)
-  pb <- oneGramTable[lastTerm==str_split_i(pairs, "\\s", 2), frequency]/sum(oneGramTable$frequency)
+  pa <- oneGramTable[lastTerm==str_split_i(pairs, "\\s", 1), frequency]/total_freq_onegram
+  pb <- oneGramTable[lastTerm==str_split_i(pairs, "\\s", 2), frequency]/total_freq_onegram
   MI <- log(pab/(pa*pb))
   return(MI)
 }
@@ -374,17 +386,52 @@ find_MI <- function(ao, b){
 }
 
 
+#This function sum MI
+sum_MI <- function(firstterm, nextword){
+  len_firstterm <- length(str_split(firstterm, "\\s")[[1]])
+  
+  MIs <- c()
+  for(m in 1:(len_firstterm-2)){
+    MIs[m] <- pair_frequency_MI_table[pair==paste(str_split_i(firstterm,"\\s",m), nextword), MI][[1]]
+  }
+  return(sum(MIs))
+}
+
+
+#This function make candidate when given input text 'preprocessed' that has 3 <= length <= 9
+make_candidate <- function(processed_firstterm){
+  len_processed_firstterm <- length(str_split(processed_firstterm, "\\s")[[1]])
+  candidate_list <- list()
+  
+
+  for(i in 1:(len_processed_firstterm-2)){
+    candidate_list[[i]] <- pair_frequency_MI_table[str_split_i(pair,"\\s",1)==str_split_i(processed_firstterm,"\\s",i), .(MI, pair, nextword=str_split_i(pair,"\\s",2))][order(-MI)]
+    candidate_list[[i]] <- candidate_list[[i]][1:ifelse(dim(candidate_list[[i]])[1]>=50,50,dim(candidate_list[[i]])[1])]
+  }
+  
+  candidate_total <- candidate_list[[1]]
+  if(len_processed_firstterm >3){
+    for(n in 1:(len_processed_firstterm-3)){
+      candidate_total <- rbind(candidate_total, candidate_list[[n+1]])
+    }
+  }
+  
+  candidate_total_MI <- candidate_total[, .(probability=getProbabilityFrom3Gram(paste(processed_firstterm, nextword))),by=nextword]
+  candidate_total_MI <- candidate_total_MI[, .(MI_prob=probability*exp(sum_MI(processed_firstterm, nextword))), by=nextword]
+  #########################again here
+  colnames(candidate_two_MI)[1] <- 'lastTerm'
+  
+  # candidate_final <- rbind(candidate_one_MI, candidate_two_MI)
+  # candidate_final <- unique(candidate_final[order(-MI_prob)])
+  return(candidate_total_MI)
+}
+
 
 predict_MI_Trigram_model <- function(inputtext){
   #preprocess input
   inputcorpus <- VCorpus(VectorSource(inputtext))
   
-  inputcorpus <- tm_map(inputcorpus, content_transformer(tolower))
-  inputcorpus <- tm_map(inputcorpus, removePunctuation)
-  inputcorpus <- tm_map(inputcorpus, removeNumbers)
-  inputcorpus <- tm_map(inputcorpus, removeWords, profanity)
-  inputcorpus <- tm_map(inputcorpus, stripWhitespace)
-  inputcorpus <- tm_map(inputcorpus, content_transformer(lemmatize_strings))
+  inputcorpus <- preprocess_corpus(inputcorpus)
   
   inputlength <- length(str_split(inputcorpus[[1]]$content, "\\s")[[1]])
   text <- inputcorpus[[1]]$content

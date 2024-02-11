@@ -10,9 +10,9 @@ for(package in packages){
 }
 
 #Data install from blog, news, twitter
-data1 <- readLines("./final/en_US/en_US.blogs.txt", n=5000)
-data2 <- readLines("./final/en_US/en_US.news.txt", n=5000)
-data3 <- readLines("./final/en_US/en_US.twitter.txt", n=5000)
+data1 <- readLines("./final/en_US/en_US.blogs.txt", n=30000)
+data2 <- readLines("./final/en_US/en_US.news.txt", n=30000)
+data3 <- readLines("./final/en_US/en_US.twitter.txt", n=30000)
 
 data <- c(data1, data2, data3)
 
@@ -304,24 +304,24 @@ predictnextword2 <- function(inputtext){
   
   threeGramTable1 <- threeGramTable[firstTerms==inputtext_processed1]
   
-  if(dim(threeGramTable1)[1] >= 3){
-    threeprob <- threeGramTable1[1:3,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+  if(dim(threeGramTable1)[1] >= 10){
+    threeprob <- threeGramTable1[1:10,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
   }else{
     threeprob <- threeGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
   }
 
   twoGramTable1 <- twoGramTable[firstTerms==inputtext_processed2 & !(lastTerm %in% threeGramTable1$lastTerm)]
   
-  if(dim(twoGramTable1)[1] >= 3){
-    twoprob <- twoGramTable1[1:3,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+  if(dim(twoGramTable1)[1] >= 10){
+    twoprob <- twoGramTable1[1:10,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
   }else{
     twoprob <- twoGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
   }
 
   oneGramTable1 <- oneGramTable[!(lastTerm %in% twoGramTable1$lastTerm) & !(lastTerm %in% threeGramTable1$lastTerm)]
   
-  if(dim(oneGramTable1)[1] >= 3){
-    oneprob <- oneGramTable1[1:3,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+  if(dim(oneGramTable1)[1] >= 10){
+    oneprob <- oneGramTable1[1:10,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
   }else{
     oneprob <- oneGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
   }
@@ -331,3 +331,125 @@ predictnextword2 <- function(inputtext){
   
   return(finalprob)
 }
+
+#####################################
+#Now we will add MI model to our trigram model
+#for this, first we make word pairs that occurs frequently
+sixgramtoken <- apply(dataforngrams, 1, tokenize_ngrams, n=6, n_min=6)
+sixgramdatatable <- as.data.table(unlist(sixgramtoken))
+sixgramdatatable <- sixgramdatatable[!is.na(V1)]
+
+pair_table <- sixgramdatatable[,.(V1,
+                    pair1=paste(str_split_i(V1, "\\s", 1), str_split_i(V1, "\\s", 6)),
+                    pair2=paste(str_split_i(V1, "\\s", 2), str_split_i(V1, "\\s", 6)),
+                    pair3=paste(str_split_i(V1, "\\s", 3), str_split_i(V1, "\\s", 6)),
+                    pair4=paste(str_split_i(V1, "\\s", 4), str_split_i(V1, "\\s", 6)),
+                    pair5=paste(str_split_i(V1, "\\s", 5), str_split_i(V1, "\\s", 6)))]
+
+pair_frequency <- cbind(pair_table$pair1, pair_table$pair2, pair_table$pair3, pair_table$pair4, pair_table$pair5)
+pair_frequency_table <- data.table(table(pair_frequency))
+colnames(pair_frequency_table) <- c('pair', 'frequency')
+pair_frequency_table <- pair_frequency_table[frequency >= 3][order(-frequency)]
+####################################
+#add MI column
+total_freq_sixgram <- dim(sixgramdatatable)[1]*5
+calculate_MI <- function(pairs, freq){
+  pab <- freq/total_freq_sixgram
+  pa <- oneGramTable[lastTerm==str_split_i(pairs, "\\s", 1), frequency]/sum(oneGramTable$frequency)
+  pb <- oneGramTable[lastTerm==str_split_i(pairs, "\\s", 2), frequency]/sum(oneGramTable$frequency)
+  MI <- log(pab/(pa*pb))
+  return(MI)
+}
+
+pair_frequency_MI_table <- pair_frequency_table[, .(MI=calculate_MI(pair, frequency)), by=pair][order(-MI)]
+##################################
+#now combine existing model with this MI model
+find_MI <- function(ao, b){
+  if(paste(ao, b) %in% pair_frequency_MI_table$pair){
+    MI <- pair_frequency_MI_table[pair==paste(ao, b), MI]
+  }else{
+    MI <- 0
+  }
+  return(MI)
+}
+
+
+
+predict_MI_Trigram_model <- function(inputtext){
+  #preprocess input
+  inputcorpus <- VCorpus(VectorSource(inputtext))
+  
+  inputcorpus <- tm_map(inputcorpus, content_transformer(tolower))
+  inputcorpus <- tm_map(inputcorpus, removePunctuation)
+  inputcorpus <- tm_map(inputcorpus, removeNumbers)
+  inputcorpus <- tm_map(inputcorpus, removeWords, profanity)
+  inputcorpus <- tm_map(inputcorpus, stripWhitespace)
+  inputcorpus <- tm_map(inputcorpus, content_transformer(lemmatize_strings))
+  
+  inputlength <- length(str_split(inputcorpus[[1]]$content, "\\s")[[1]])
+  text <- inputcorpus[[1]]$content
+  
+  if(inputlength==2){
+    return(predictnextword2(text)[1:10])
+  }else if(inputlength==3){
+    candidate_one <- predictnextword2(text)
+    candidate_one_MI <- candidate_one[,.(probability, MI_prob=probability*exp(find_MI(str_split_i(text,"\\s",1), as.character(lastTerm,"\\s",2)))),by=lastTerm]
+    
+    candidate_two <- pair_frequency_MI_table[str_split_i(pair,"\\s",1)==str_split_i(text,"\\s",1), .(MI, nextword=str_split_i(pair,"\\s",2))][order(-MI)]
+    candidate_two <- candidate_two[1:ifelse(dim(candidate_two)[1]>=50,50,dim(candidate_two)[1])]
+    
+    candidate_two_MI <- candidate_two[, .(probability=getProbabilityFrom3Gram(paste(text, nextword)), MI),by=nextword]
+    candidate_two_MI <- candidate_two_MI[, .(probability, MI_prob=probability*exp(MI)),by=nextword]
+    colnames(candidate_two_MI)[1] <- 'lastTerm'
+    
+    candidate_final <- rbind(candidate_one_MI, candidate_two_MI)
+    candidate_final <- unique(candidate_final[order(-MI_prob)])
+    return(candidate_final[1:10])
+  }else if(inputlength==4){
+    candidate_one <- predictnextword2(text)
+    candidate_one_MI <- candidate_one[,.(probability, MI_prob=probability*exp(sum(find_MI(str_split_i(text,"\\s",1), as.character(lastTerm,"\\s",2)),
+                                                                                  find_MI(str_split_i(text,"\\s",2), as.character(lastTerm,"\\s",2))))),by=lastTerm]
+    
+    candidate_two <- pair_frequency_MI_table[str_split_i(pair,"\\s",1)==str_split_i(text,"\\s",1), .(MI, nextword=str_split_i(pair,"\\s",2))][order(-MI)]
+    candidate_two <- candidate_two[1:ifelse(dim(candidate_two)[1]>=50,50,dim(candidate_two)[1])]
+    candidate_three <- pair_frequency_MI_table[str_split_i(pair,"\\s",1)==str_split_i(text,"\\s",2), .(MI, nextword=str_split_i(pair,"\\s",2))][order(-MI)]
+    candidate_three <- candidate_three[1:ifelse(dim(candidate_three)[1]>=50,50,dim(candidate_three)[1])]
+    candidate_two_three <- rbind(candidate_two, candidate_three)
+    
+    candidate_two_three_MI <- candidate_two_three[, .(probability=getProbabilityFrom3Gram(paste(text, nextword)), MI),by=nextword]
+    candidate_two_three_MI <- candidate_two_three_MI[, .(probability, MI_prob=probability*exp(sum(find_MI(str_split_i(text,"\\s",1),as.character(nextword)),
+                                                                                      find_MI(str_split_i(text,"\\s",2),as.character(nextword))))),by=nextword]
+    colnames(candidate_two_three_MI)[1] <- 'lastTerm'
+    
+    candidate_final <- rbind(candidate_one_MI, candidate_two_three_MI)
+    candidate_final <- unique(candidate_final[order(-MI_prob)])
+    return(candidate_final[1:10])
+  }else if(inputlength>=5){
+    text <- gsub("_", " ", getLastTerms(text, n=5))
+    
+    candidate_one <- predictnextword2(text)
+    candidate_one_MI <- candidate_one[,.(probability, MI_prob=probability*exp(sum(find_MI(str_split_i(text,"\\s",1), as.character(lastTerm,"\\s",2)),
+                                                                                  find_MI(str_split_i(text,"\\s",2), as.character(lastTerm,"\\s",2)),
+                                                                                  find_MI(str_split_i(text,"\\s",3), as.character(lastTerm,"\\s",2))))),by=lastTerm]
+    
+    candidate_two <- pair_frequency_MI_table[str_split_i(pair,"\\s",1)==str_split_i(text,"\\s",1), .(MI, nextword=str_split_i(pair,"\\s",2))][order(-MI)]
+    candidate_two <- candidate_two[1:ifelse(dim(candidate_two)[1]>=50,50,dim(candidate_two)[1])]
+    candidate_three <- pair_frequency_MI_table[str_split_i(pair,"\\s",1)==str_split_i(text,"\\s",2), .(MI, nextword=str_split_i(pair,"\\s",2))][order(-MI)]
+    candidate_three <- candidate_three[1:ifelse(dim(candidate_three)[1]>=50,50,dim(candidate_three)[1])]
+    candidate_four <- pair_frequency_MI_table[str_split_i(pair,"\\s",1)==str_split_i(text,"\\s",3), .(MI, nextword=str_split_i(pair,"\\s",2))][order(-MI)]
+    candidate_four <- candidate_four[1:ifelse(dim(candidate_four)[1]>50,50,dim(candidate_four)[1])]
+    candidate_two_three_four <- rbind(candidate_two, candidate_three, candidate_four)
+    
+    candidate_two_three_four_MI <- candidate_two_three_four[, .(probability=getProbabilityFrom3Gram(paste(text, nextword)), MI),by=nextword]
+    candidate_two_three_four_MI <- candidate_two_three_four_MI[, .(probability, MI_prob=probability*exp(sum(find_MI(str_split_i(text,"\\s",1),as.character(nextword)),
+                                                                                                            find_MI(str_split_i(text,"\\s",2),as.character(nextword)),
+                                                                                                            find_MI(str_split_i(text,"\\s",3),as.character(nextword))))),by=nextword]
+    colnames(candidate_two_three_four_MI)[1] <- 'lastTerm'
+    
+    candidate_final <- rbind(candidate_one_MI, candidate_two_three_four_MI)
+    candidate_final <- unique(candidate_final[order(-MI_prob)])
+    return(candidate_final[1:10])
+  }
+}
+
+

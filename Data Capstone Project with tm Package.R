@@ -11,7 +11,7 @@ for(package in packages){
 }
 
 #Data install from blog, news, twitter
-n_line <- 1000
+n_line <- 10000
 data1 <- readLines("./final/en_US/en_US.blogs.txt", n=n_line)
 data2 <- readLines("./final/en_US/en_US.news.txt", n=n_line)
 data3 <- readLines("./final/en_US/en_US.twitter.txt", n=n_line)
@@ -364,15 +364,19 @@ pair_frequency_table <- pair_frequency_table[-1]
 #add MI column to pairs
 total_freq_tengram <- dim(tengramtable)[1]*9
 total_freq_onegram <- sum(oneGramTable$frequency)
-calculate_MI <- function(pairs, freq){
+calculate_MI <- function(pair1, pair2, freq){
   pab <- freq/total_freq_tengram
-  pa <- oneGramTable[lastTerm==str_split_i(pairs, "\\s", 1), frequency]/total_freq_onegram
-  pb <- oneGramTable[lastTerm==str_split_i(pairs, "\\s", 2), frequency]/total_freq_onegram
+  pa <- oneGramTable[lastTerm==pair1, frequency]/total_freq_onegram
+  pb <- oneGramTable[lastTerm==pair2, frequency]/total_freq_onegram
   MI <- log(pab/(pa*pb))
   return(MI)
 }
 
-pair_frequency_MI_table <- pair_frequency_table[, .(MI=calculate_MI(pair, frequency)), by=pair][order(-MI)]
+pair_frequency_table <- pair_frequency_table[,.(frequency, pair1=str_split_i(pair, "\\s", 1),
+                                                           pair2=str_split_i(pair, "\\s", 2)),
+                                             by=pair]
+pair_frequency_MI_table <- pair_frequency_table[, .(MI=calculate_MI(pair1,
+                                                                    pair2, frequency)), by=pair][order(-MI)]
 ################################################################################
 #now combine existing model with this MI model
 find_MI <- function(ao, b){

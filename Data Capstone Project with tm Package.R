@@ -449,6 +449,7 @@ predict_MI_Trigram_model <- function(inputtext){
     return(candidate_final_MI)
   }else if(inputlength>=10){
     processed_input <- gsub("_", " ", getLastTerms(processed_input, n=9))
+    candidate_final_MI <- make_candidate(processed_input)
     return(candidate_final_MI)
   }
 }

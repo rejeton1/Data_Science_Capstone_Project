@@ -1,7 +1,8 @@
 #Install required packages
 packages <- c('tm','readr','stringi','tokenizers','ggplot2','wordcloud',
               'SnowballC','gridExtra', 'sentimentr', 
-              'textstem', 'lexicon', 'stringr', 'dplyr', 'data.table')
+              'textstem', 'lexicon', 'stringr', 'dplyr', 'data.table', 'LaF',
+              'stopwords')
 
 for(package in packages){
   if(!(package %in% installed.packages())){
@@ -11,7 +12,7 @@ for(package in packages){
 }
 
 #Data install from blog, news, twitter
-n_line <- 10000
+n_line <- 5000
 data1 <- readLines("./final/en_US/en_US.blogs.txt", n=n_line)
 data2 <- readLines("./final/en_US/en_US.news.txt", n=n_line)
 data3 <- readLines("./final/en_US/en_US.twitter.txt", n=n_line)
@@ -299,24 +300,24 @@ predictnextword <- function(inputtext){
   
   threeGramTable1 <- threeGramTable[firstTerms==inputtext_processed1]
   
-  if(dim(threeGramTable1)[1] >= 10){
-    threeprob <- threeGramTable1[1:10,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+  if(dim(threeGramTable1)[1] >= 20){
+    threeprob <- threeGramTable1[1:20,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
   }else{
     threeprob <- threeGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
   }
 
   twoGramTable1 <- twoGramTable[firstTerms==inputtext_processed2 & !(lastTerm %in% threeGramTable1$lastTerm)]
   
-  if(dim(twoGramTable1)[1] >= 10){
-    twoprob <- twoGramTable1[1:10,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+  if(dim(twoGramTable1)[1] >= 20){
+    twoprob <- twoGramTable1[1:20,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
   }else{
     twoprob <- twoGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
   }
 
   oneGramTable1 <- oneGramTable[!(lastTerm %in% twoGramTable1$lastTerm) & !(lastTerm %in% threeGramTable1$lastTerm)]
   
-  if(dim(oneGramTable1)[1] >= 10){
-    oneprob <- oneGramTable1[1:10,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+  if(dim(oneGramTable1)[1] >= 20){
+    oneprob <- oneGramTable1[1:20,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
   }else{
     oneprob <- oneGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
   }
@@ -354,16 +355,46 @@ pair_table <- tengramtable[,.(V1,
                     pair9=paste(str_split_i(V1, "\\s", 8), str_split_i(V1, "\\s", 10)),
                     pair10=paste(str_split_i(V1, "\\s", 9), str_split_i(V1, "\\s", 10)))]
 
-pair_frequency <- cbind(pair_table$pair1, pair_table$pair2, pair_table$pair3, pair_table$pair4, pair_table$pair5,
+pair_frequency <- c(pair_table$pair1, pair_table$pair2, pair_table$pair3, pair_table$pair4, pair_table$pair5,
                         pair_table$pair6, pair_table$pair7, pair_table$pair8, pair_table$pair9)
-pair_frequency_table <- data.table(table(pair_frequency))
+pair_frequency <- pair_frequency[!grepl("NA", pair_frequency)]
+pair_frequency_table <- data.table(table(pair_frequency))[order(-N)]
 colnames(pair_frequency_table) <- c('pair', 'frequency')
-pair_frequency_table <- pair_frequency_table[frequency >= 3][order(-frequency)]
-pair_frequency_table <- pair_frequency_table[-1]
 ################################################################################
 #add MI column to pairs
-total_freq_tengram <- dim(tengramtable)[1]*9
+pair_frequency_table <- pair_frequency_table[,.(frequency, pair1=str_split_i(pair, "\\s", 1),
+                                                           pair2=str_split_i(pair, "\\s", 2)),
+                                             by=pair]
+
+total_freq_tengram <- length(pair_frequency)
 total_freq_onegram <- sum(oneGramTable$frequency)
+
+pair_frequency_table <- pair_frequency_table[frequency >= 5][order(-frequency)]
+
+stopwords <- stopwords::stopwords("en", source = "nltk")
+pair_frequency_table_without_stopword <- pair_frequency_table[!(pair1 %in% stopwords) & !(pair2 %in% stopwords)]
+
+#Before add MI column, filtering through AMI value.
+calculate_AMI <- function(pairword1, pairword2, pairfreq){
+  pab <- pairfreq/total_freq_tengram
+  pa_b_ <- 1-pab
+  pa_b <- sum(pair_frequency_table[(pair1!=pairword1 & pair2==pairword2), frequency])/total_freq_tengram
+  pab_ <- sum(pair_frequency_table[(pair1==pairword1 & pair2!=pairword2), frequency])/total_freq_tengram
+  pa <- oneGramTable[lastTerm==pairword1, frequency]/total_freq_onegram
+  pa_ <- 1-pa
+  pb <- oneGramTable[lastTerm==pairword2, frequency]/total_freq_onegram
+  pb_ <- 1-pb
+  
+  AMI1 <- pab*log(pab/(pa*pb))
+  AMI2 <- pab_*log(pab_/(pa*pb_))
+  AMI3 <- pa_b*log(pa_b/(pa_*pb))
+  AMI4 <- pa_b_*log(pa_b_/(pa_*pb_))
+  
+  AMI <- AMI1 + AMI2 + AMI3 + AMI4
+  
+  return(AMI4)
+}
+
 calculate_MI <- function(pair1, pair2, freq){
   pab <- freq/total_freq_tengram
   pa <- oneGramTable[lastTerm==pair1, frequency]/total_freq_onegram
@@ -372,10 +403,11 @@ calculate_MI <- function(pair1, pair2, freq){
   return(MI)
 }
 
-pair_frequency_table <- pair_frequency_table[,.(frequency, pair1=str_split_i(pair, "\\s", 1),
-                                                           pair2=str_split_i(pair, "\\s", 2)),
-                                             by=pair]
-pair_frequency_MI_table <- pair_frequency_table[, .(MI=calculate_MI(pair1,
+pair_frequency_AMI_table <- pair_frequency_table_without_stopword[,.(pair1, pair2, frequency, 
+                                                    AMI=calculate_AMI(pair1, pair2, frequency)),by=pair][order(-AMI)]
+
+
+pair_frequency_MI_table <- pair_frequency_AMI_table[, .(MI=calculate_MI(pair1,
                                                                     pair2, frequency)), by=pair][order(-MI)]
 ################################################################################
 #now combine existing model with this MI model
@@ -412,7 +444,7 @@ make_candidate <- function(processed_firstterm){
 
   for(i in 1:(len_processed_firstterm-2)){
     candidate_list[[i]] <- pair_frequency_MI_table[str_split_i(pair,"\\s",1)==str_split_i(processed_firstterm,"\\s",i), .(MI, pair, nextword=str_split_i(pair,"\\s",2))][order(-MI)]
-    candidate_list[[i]] <- candidate_list[[i]][1:ifelse(dim(candidate_list[[i]])[1]>=100,100,dim(candidate_list[[i]])[1])]
+    candidate_list[[i]] <- candidate_list[[i]][1:ifelse(dim(candidate_list[[i]])[1]>=50,50,dim(candidate_list[[i]])[1])]
   }
   
   candidate_total <- candidate_list[[1]]
@@ -443,15 +475,58 @@ predict_MI_Trigram_model <- function(inputtext){
   
   if(inputlength==2){
     candidate_final_MI <- predictnextword(processed_input)
-    return(candidate_final_MI)
+    return(candidate_final_MI[1:5])
   }else if(inputlength>=3 & inputlength <=9){
     candidate_final_MI <- make_candidate(processed_input)
-    return(candidate_final_MI)
+    return(candidate_final_MI[1:5])
   }else if(inputlength>=10){
     processed_input <- gsub("_", " ", getLastTerms(processed_input, n=9))
     candidate_final_MI <- make_candidate(processed_input)
-    return(candidate_final_MI)
+    return(candidate_final_MI[1:5])
   }
 }
+
+###############################################################################
+#Apply this model to validation dataset(n=1000)
+valid_set1 <- sample_lines("./final/en_US/en_US.blogs.txt", n=400)
+valid_set2 <- sample_lines("./final/en_US/en_US.news.txt", n=300)
+valid_set3 <- sample_lines("./final/en_US/en_US.twitters.txt", n=300)
+
+valid_set <- c(valid_set1, valid_set2, valid_set3)
+
+valid_corpus <- VCorpus(VectorSource(valid_set))
+
+valid_corpus <- preprocess_corpus(valid_corpus)
+
+valid_data <- data.frame(text=sapply(valid_corpus, as.character), 
+                            stringsAsFactors = FALSE)
+valid_table <- as.data.table(valid_data)
+
+make_firstTerm <- function(text){
+  split_text <- str_split(text, "\\s")[[1]]
+  split_text <- paste(split_text[-length(split_text)])
+  return(split_text)
+}
+
+make_lastTerm <- function(text){
+  split_text <- str_split(text, "\\s")[[1]]
+  split_text <- split_text[length(split_text)]
+  return(split_text)
+}
+valid_table <- valid_table[,.(firstTerm=make_firstTerm(text), 
+                              lastTerm=make_lastTerm(text)), by=text]
+
+make_OX <- function(answer, prediction){
+  if(answer %in% prediction){
+    return(TRUE)
+  }else{
+    return(FALSE)
+  }
+}
+valid_pred <- valid_table[,.(lastTerm, prediction=predict_MI_Trigram_model(firstTerm)),
+                          by=fisrtTerm]
+valid_pred <- valid_pred[,.(lastTerm, prediction, correct=make_OX(lastTerm, prediction)),
+                         by=firstTerm]
+
 
 

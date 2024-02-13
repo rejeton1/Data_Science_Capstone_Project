@@ -12,12 +12,14 @@ for(package in packages){
 }
 
 #Data install from blog, news, twitter
-n_line <- 5000
+n_line <- 10000
 data1 <- readLines("./final/en_US/en_US.blogs.txt", n=n_line)
 data2 <- readLines("./final/en_US/en_US.news.txt", n=n_line)
 data3 <- readLines("./final/en_US/en_US.twitter.txt", n=n_line)
 
 data <- c(data1, data2, data3)
+
+rm(data1, data2, data3)
 
 
 #Make a corpus
@@ -31,9 +33,7 @@ corpus <- VCorpus(VectorSource(data))
 ##2. remove punctuations
 ##3. remove numbers
 ##4. remove profanity
-##4.5. remove foreign language 
 ##5. remove extra white space
-##6. lemmatization
 #content_transformer allow function applied to only vector to be able to 
 #be applied to textdocument.
 #after when i need, i can modify the lemmatize dictionary 
@@ -48,11 +48,12 @@ profanity <- union(union(pro1, pro2),pro3)
 
 preprocess_corpus <- function(corpus){
   corpus <- tm_map(corpus, content_transformer(tolower))
-  corpus <- tm_map(corpus, removePunctuation)
+  corpus <- tm_map(corpus, removePunctuation, ucp=TRUE)
   corpus <- tm_map(corpus, removeNumbers)
   corpus <- tm_map(corpus, removeWords, profanity)
   corpus <- tm_map(corpus, stripWhitespace)
-  corpus <- tm_map(corpus, content_transformer(lemmatize_strings))
+  corpus <- tm_map(corpus, content_transformer(function(x) str_remove(x, pattern="\\s$")))
+  corpus <- tm_map(corpus, content_transformer(function(x) str_remove(x, pattern="^\\s")))
   return(corpus)
 }
 
@@ -60,7 +61,7 @@ corpus <- preprocess_corpus(corpus)
 
 
 #Check the corpus after preprocess
-for(i in 1:6){
+for(i in 1:50){
   print(corpus[[i]]$content)
 }
 ################################################################################
@@ -357,22 +358,30 @@ pair_table <- tengramtable[,.(V1,
 
 pair_frequency <- c(pair_table$pair1, pair_table$pair2, pair_table$pair3, pair_table$pair4, pair_table$pair5,
                         pair_table$pair6, pair_table$pair7, pair_table$pair8, pair_table$pair9)
+rm(pair_table)
 pair_frequency <- pair_frequency[!grepl("NA", pair_frequency)]
 pair_frequency_table <- data.table(table(pair_frequency))[order(-N)]
 colnames(pair_frequency_table) <- c('pair', 'frequency')
 ################################################################################
 #add MI column to pairs
 pair_frequency_table <- pair_frequency_table[,.(frequency, pair1=str_split_i(pair, "\\s", 1),
-                                                           pair2=str_split_i(pair, "\\s", 2)),
-                                             by=pair]
+                                                           pair2=str_split_i(pair, "\\s", 2)),by=pair][order(-frequency)]
 
-total_freq_tengram <- length(pair_frequency)
+total_freq_tengram <- length(tengramtable$V1)
 total_freq_onegram <- sum(oneGramTable$frequency)
+rm(pair_frequency)
 
-pair_frequency_table <- pair_frequency_table[frequency >= 5][order(-frequency)]
+pair_frequency_table_over5 <- pair_frequency_table[frequency >= 5][order(-frequency)]
 
-stopwords <- stopwords::stopwords("en", source = "nltk")
-pair_frequency_table_without_stopword <- pair_frequency_table[!(pair1 %in% stopwords) & !(pair2 %in% stopwords)]
+stopwords1 <- stopwords::stopwords("en", source = "nltk")
+stopwords2 <- stopwords::stopwords("en", source = "snowball")
+stopwords <- unique(stopwords1, stopwords2)
+stopword_punct_removed <- removePunctuation(stopwords, ucp=TRUE)
+stopwords <- c(stopwords, stopword_punct_removed)
+stopwords <- unique(stopwords)
+stopwords <- c(stopwords, 'one', 'two', 'u', 'im', 'us', 'would')
+
+pair_frequency_table_without_stopword <- pair_frequency_table_over5[!(pair1 %in% stopwords) & !(pair2 %in% stopwords)]
 
 #Before add MI column, filtering through AMI value.
 calculate_AMI <- function(pairword1, pairword2, pairfreq){
@@ -407,9 +416,9 @@ pair_frequency_AMI_table <- pair_frequency_table_without_stopword[,.(pair1, pair
                                                     AMI=calculate_AMI(pair1, pair2, frequency)),by=pair][order(-AMI)]
 
 
-pair_frequency_MI_table <- pair_frequency_AMI_table[, .(MI=calculate_MI(pair1,
+pair_frequency_MI_table <- pair_frequency_AMI_table[, .(AMI, MI=calculate_MI(pair1,
                                                                     pair2, frequency)), by=pair][order(-MI)]
-################################################################################
+w################################################################################
 #now combine existing model with this MI model
 find_MI <- function(ao, b){
   if(paste(ao, b) %in% pair_frequency_MI_table$pair){
@@ -487,12 +496,54 @@ predict_MI_Trigram_model <- function(inputtext){
 }
 
 ###############################################################################
+#test this model to one sample
+make_firstTerm <- function(text){
+  split_text <- str_split(text, "\\s")[[1]]
+  paste_text <- paste(split_text[-length(split_text)], collapse = ' ')
+  return(paste_text)
+}
+
+make_lastTerm <- function(text){
+  split_text <- str_split(text, "\\s")[[1]]
+  split_text <- split_text[length(split_text)]
+  return(split_text)
+}
+
+test_sample <- function(seed_number){
+  set.seed(seed_number)
+  valid_sample <- sample_lines("./final/en_US/en_US.news.txt", n=1)
+  valid_sample <- str_remove(valid_sample, pattern="\\r$")
+  valid_corpus <- VCorpus(VectorSource(valid_sample))
+  valid_corpus <- preprocess_corpus(valid_corpus)
+  
+  valid_data <- data.frame(text=sapply(valid_corpus, as.character), 
+                           stringsAsFactors = FALSE)
+  valid_table <- as.data.table(valid_data)
+  
+  
+  valid_table <- valid_table[,.(firstTerm=make_firstTerm(text), 
+                                lastTerm=make_lastTerm(text)), by=text]
+  
+  question <- valid_table[,firstTerm]
+  answer <- valid_table[,lastTerm]
+  predict_katz <- predictnextword(question)[1:5]
+  predict_MI <- predict_MI_Trigram_model(question)
+  
+  answerdata <- data.frame(ques=question, ans=answer, pred_katz=predict_katz, pred_MI=predict_MI)
+  return(answerdata)
+}
+
+
 #Apply this model to validation dataset(n=1000)
+
+
+
 valid_set1 <- sample_lines("./final/en_US/en_US.blogs.txt", n=400)
 valid_set2 <- sample_lines("./final/en_US/en_US.news.txt", n=300)
 valid_set3 <- sample_lines("./final/en_US/en_US.twitters.txt", n=300)
 
 valid_set <- c(valid_set1, valid_set2, valid_set3)
+valid_set <- str_remove(valid_set, pattern="\\r$")
 
 valid_corpus <- VCorpus(VectorSource(valid_set))
 
@@ -502,17 +553,7 @@ valid_data <- data.frame(text=sapply(valid_corpus, as.character),
                             stringsAsFactors = FALSE)
 valid_table <- as.data.table(valid_data)
 
-make_firstTerm <- function(text){
-  split_text <- str_split(text, "\\s")[[1]]
-  split_text <- paste(split_text[-length(split_text)])
-  return(split_text)
-}
 
-make_lastTerm <- function(text){
-  split_text <- str_split(text, "\\s")[[1]]
-  split_text <- split_text[length(split_text)]
-  return(split_text)
-}
 valid_table <- valid_table[,.(firstTerm=make_firstTerm(text), 
                               lastTerm=make_lastTerm(text)), by=text]
 

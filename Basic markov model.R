@@ -11,7 +11,7 @@ for(package in packages){
 
 
 #Data install from blog, news, twitter
-n_line <- 5000
+n_line <- 50000
 data1 <- readLines("./final/en_US/en_US.blogs.txt", n=n_line)
 data2 <- readLines("./final/en_US/en_US.news.txt", n=n_line)
 data3 <- readLines("./final/en_US/en_US.twitter.txt", n=n_line)
@@ -37,14 +37,21 @@ add_start_end_token <- function(text){
   return(sum_up_sentences)
 }
 
+removeQuotation <- function(x){
+  x <- gsub("“","",x,fixed = TRUE)
+  x <- gsub("”","",x,fixed = TRUE)
+  return(x)
+} 
+
 preprocess_corpus <- function(corpus){
-  corpus <- tm_map(corpus, content_transformer(replace_non_ascii))
-  corpus <- tm_map(corpus, content_transformer(tolower))
+  corpus <- tm_map(corpus, content_transformer(removeQuotation))
   corpus <- tm_map(corpus, content_transformer(function(x) add_start_end_token(x)))
-  corpus <- tm_map(corpus, removeWords, stopwords("english"))
+  corpus <- tm_map(corpus, content_transformer(tolower))
+  corpus <- tm_map(corpus, content_transformer(replace_non_ascii))
   corpus <- tm_map(corpus, removePunctuation, ucp=TRUE, preserve_intra_word_contractions=TRUE,
                    preserve_intra_word_dashes=TRUE)
   corpus <- tm_map(corpus, removeNumbers)
+  corpus <- tm_map(corpus, stripWhitespace)
   corpus <- tm_map(corpus, removeWords, profanity)
   corpus <- tm_map(corpus, stripWhitespace)
   corpus <- tm_map(corpus, content_transformer(function(x) str_remove(x, pattern="\\s$")))
@@ -52,15 +59,18 @@ preprocess_corpus <- function(corpus){
   return(corpus)
 }
 
-corpusdata <- data.frame(text=sapply(corpus, as.character), 
-                         stringsAsFactors = FALSE)
 
-corpus <- preprocess_corpus(corpus)
+cleaned_corpus <- preprocess_corpus(corpus)
+
+before_after_process <- function(num){
+  before_after_corpus <- c(corpus[[num]]$content, cleaned_corpus[[num]]$content)
+  return(before_after_corpus)
+}
 
 
 #################################################################################
 #Make n-grams(n=1~3)
-dataforngrams <- data.frame(text=sapply(corpus, as.character), 
+dataforngrams <- data.frame(text=sapply(cleaned_corpus, as.character), 
                             stringsAsFactors = FALSE)
 unigramtoken <- apply(dataforngrams, 1, tokenize_ngrams, n=1, n_min=1)
 bigramtoken <- apply(dataforngrams, 1, tokenize_ngrams, n=2, n_min=2)
@@ -85,6 +95,12 @@ threeGramTable <- threeGramTable[,.(firstTerms=paste(str_split_i(V1, "\\s", i=1)
 colnames(threeGramTable)[3] <- 'frequency'
 #################################################################################
 ##########################################
+calcLeftOverProb = function(lastTerm, frequency, discount){
+  all_freq = sum(frequency)
+  
+  return(1-sum((discount*frequency)/all_freq))
+}
+
 #add discount column to onegramtable
 oneGramTable$discount = rep(1, nrow(oneGramTable))
 
@@ -119,14 +135,12 @@ for(ii in 5:1){
   # the beauty of "data.table"!
   twoGramTable[frequency == currRTimes, discount := currd]
 }
+
+twoGramTable_leftOverProb = twoGramTable[, .(leftoverprob=calcLeftOverProb(lastTerm, frequency, discount)), by=firstTerms]
+
 twoGramTable <- mutate(twoGramTable, c_est=frequency*discount)
 twoGramTable <- twoGramTable[order(-c_est)]
 #add discount rate and leftoverprob column
-calcLeftOverProb = function(lastTerm, frequency, discount){
-  all_freq = sum(frequency)
-  
-  return(1-sum((discount*frequency)/all_freq))
-}
 
 
 threeGramTable$discount = rep(1, nrow(threeGramTable))
@@ -213,12 +227,38 @@ getProbabilityFrom3Gram = function(inputString){
       }
     }
   } else {
-    stop(sprintf("[%s] not found in the 3-gram model.", inFirstTerms3gram))
-    # The workaround could be:
-    # + Write another function in which we primarily use 2-gram with support from 1-gram.
-    # + Increase the corpus size so that the 3-gram can capture more diversity of words...
+    #ABX doesn't exist at all
+    mylist = separateTerms(getLastTerms(inputString, num = 2))
+    inFirstTerms2gram = mylist$firstTerms #B
+    inLastTerm2gram = mylist$lastTerm     #C
+    
+    
+    oneGroupIn2Gram = twoGramTable[firstTerms == inFirstTerms2gram]   #BX
+    oneRecordIn2Gram = twoGramTable[firstTerms == inFirstTerms2gram & lastTerm == inLastTerm2gram]    #BC
+    
+    if(nrow(oneGroupIn2Gram) > 0){
+      beta_leftoverprob = twoGramTable_leftOverProb[firstTerms == inFirstTerms2gram]$leftoverprob
+      if (nrow(oneRecordIn2Gram) > 0){
+        all_freq = sum(oneGroupIn2Gram$frequency)
+        finalProb = ((oneRecordIn2Gram$discount * oneRecordIn2Gram$frequency) / all_freq)
+      } else {
+        oneGroupIn1Gram = oneGramTable # we don't have "firstTerms" here!
+        oneRecordIn1Gram = oneGramTable[lastTerm == inLastTerm2gram] # what if this returns "zero" row?
+        
+        oneGroupIn1Gram_Remain = oneGroupIn1Gram[!(oneGroupIn1Gram$lastTerm %in% oneGroupIn2Gram$lastTerm)]
+        all_freq = sum(oneGroupIn1Gram$frequency)
+        
+        alpha = beta_leftoverprob / sum((oneGroupIn1Gram_Remain$frequency * oneGroupIn1Gram_Remain$discount) / all_freq)
+        
+        finalProb = alpha * ((oneRecordIn1Gram$frequency * oneRecordIn1Gram$discount) / all_freq)
+     }
+    } else {
+      oneGroupIn1Gram = oneGramTable
+      oneRecordIn1Gram = oneGramTable[lastTerm == inLastTerm2gram]
+      all_freq = sum(oneGroupIn1Gram$frequency)
+      finalProb = ((oneRecordIn1Gram$discount * oneRecordIn1Gram$frequency) / all_freq)
+    }
   }
-  
   finalProb
 }
 
@@ -277,31 +317,63 @@ predictnextword <- function(inputtext){
   inputtext_processed2 <- getLastTerms(inputtext, n=1)
   
   threeGramTable1 <- threeGramTable[firstTerms==inputtext_processed1]
+  twoGramTable2 <- twoGramTable[firstTerms==inputtext_processed2]
   
-  if(dim(threeGramTable1)[1] >= 3){
-    threeprob <- threeGramTable1[1:3,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
-  }else{
-    threeprob <- threeGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+  if(dim(threeGramTable1)[1] > 0){
+    if(dim(threeGramTable1)[1] >= 20){
+      threeprob <- threeGramTable1[1:20,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+    }else{
+      threeprob <- threeGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+    }
+    
+    twoGramTable1 <- twoGramTable[firstTerms==inputtext_processed2 & !(lastTerm %in% threeGramTable1$lastTerm)]
+    
+    if(dim(twoGramTable1)[1] >= 20){
+      twoprob <- twoGramTable1[1:20,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+    }else{
+      twoprob <- twoGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+    }
+    
+    oneGramTable1 <- oneGramTable[!(lastTerm %in% twoGramTable1$lastTerm) & !(lastTerm %in% threeGramTable1$lastTerm)]
+    
+    if(dim(oneGramTable1)[1] >= 20){
+      oneprob <- oneGramTable1[1:20,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+    }else{
+      oneprob <- oneGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+    }
+    
+    finalprob <- rbind(threeprob, twoprob, oneprob)
+    finalprob <- finalprob[!(lastTerm %in% stopwords()) & !(lastTerm %in% c("scsc", "ecec"))][order(-probability)]
+    
+    
+  } else if(dim(twoGramTable2)[1] > 0){
+    
+    if(dim(twoGramTable2)[1] >= 20){
+      twoprob <- twoGramTable2[1:20,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+    }else{
+      twoprob <- twoGramTable2[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+    }
+    
+    oneGramTable2 <- oneGramTable[!(lastTerm %in% twoGramTable2$lastTerm)]
+    
+    if(dim(oneGramTable2)[1] >= 20){
+      oneprob <- oneGramTable2[1:20,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+    }else{
+      oneprob <- oneGramTable2[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+    }
+    
+    finalprob <- rbind(twoprob, oneprob)
+    finalprob <- finalprob[!(lastTerm %in% stopwords()) & !(lastTerm %in% c("scsc", "ecec"))][order(-probability)]
+  } else {
+    oneGramTable3 <- oneGramTable[1:10]
+    oneGramTable3 <- oneGramTable3[!(lastTerm %in% c("scsc", "ecec"))]
+    
+    oneprob <- oneGramTable3[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+    
+    finalprob <- oneprob
   }
   
-  twoGramTable1 <- twoGramTable[firstTerms==inputtext_processed2 & !(lastTerm %in% threeGramTable1$lastTerm)]
   
-  if(dim(twoGramTable1)[1] >= 3){
-    twoprob <- twoGramTable1[1:3,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
-  }else{
-    twoprob <- twoGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
-  }
-  
-  oneGramTable1 <- oneGramTable[!(lastTerm %in% twoGramTable1$lastTerm) & !(lastTerm %in% threeGramTable1$lastTerm)]
-  
-  if(dim(oneGramTable1)[1] >= 3){
-    oneprob <- oneGramTable1[1:3,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
-  }else{
-    oneprob <- oneGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
-  }
-  
-  finalprob <- rbind(threeprob, twoprob, oneprob)
-  finalprob <- finalprob[order(-probability)]
   
   return(finalprob[1:3])
 }
@@ -322,7 +394,10 @@ make_lastTerm <- function(text){
 }
 
 make_OX <- function(answer, prediction){
-  if(answer %in% prediction){
+  prediction_vec <- c(as.character(prediction[1,1]),
+                      as.character(prediction[2,1]),
+                      as.character(prediction[3,1]))
+  if(answer %in% prediction_vec){
     return(TRUE)
   }else{
     return(FALSE)
@@ -330,7 +405,8 @@ make_OX <- function(answer, prediction){
 }
 
 
-test_sample <- function(seed_number){
+
+test_sample <- function(seed_number, num_of_sample){
   set.seed(seed_number)
   valid_sample <- sample_lines("./final/en_US/en_US.news.txt", n=1)
   valid_sample <- str_remove(valid_sample, pattern="\\r$")
@@ -339,49 +415,18 @@ test_sample <- function(seed_number){
   
   valid_data <- data.frame(text=sapply(valid_corpus, as.character), 
                            stringsAsFactors = FALSE)
-  valid_table <- as.data.table(valid_data)
+  valid_trigram <- apply(valid_data, 1, tokenize_ngrams, n=3, n_min=3)
+  valid_trigram <- unlist(valid_trigram)
+  valid_trigram_table <- data.table(trigram=valid_trigram)
+  valid_trigram_table <- valid_trigram_table[,.(firstTerm=make_firstTerm(trigram), 
+                                                lastTerm=make_lastTerm(trigram)), by=trigram]
   
   
-  valid_table <- valid_table[,.(firstTerm=make_firstTerm(text), 
-                                lastTerm=make_lastTerm(text)), by=text]
-  
-  eval_table <- valid_table[,.(firstTerm, lastTerm, prediction=as.list(predictnextword(firstTerm)[1])), by=firstTerm]
-  eval_table <- eval_table[,.(firstTerm, lastTerm, prediction, OX=make_OX(lastTerm, prediction))]
-  question <- valid_table[,firstTerm]
-  answer <- valid_table[,lastTerm]
-  predict_katz <- predictnextword(question)
-  predict_MI <- predict_MI_Trigram_model(question)
-  
-  answerdata <- data.frame(ques=question, ans=answer, pred_katz=as.list(predict_katz))
-  return(answerdata)
+  eval_table <- valid_trigram_table[!(lastTerm %in% stopwords()) & !(lastTerm %in% c('scsc', 'ecec'))]
+  eval_table <- eval_table[,.(answer=lastTerm, pred=as.character(predictnextword(firstTerm)[1,1]), 
+                              OX=make_OX(lastTerm, predictnextword(firstTerm))), by=firstTerm]
+  return(eval_table)
 }
 
 
-#Apply this model to validation dataset(n=1000)
 
-
-
-valid_set1 <- sample_lines("./final/en_US/en_US.blogs.txt", n=400)
-valid_set2 <- sample_lines("./final/en_US/en_US.news.txt", n=300)
-valid_set3 <- sample_lines("./final/en_US/en_US.twitters.txt", n=300)
-
-valid_set <- c(valid_set1, valid_set2, valid_set3)
-valid_set <- str_remove(valid_set, pattern="\\r$")
-
-valid_corpus <- VCorpus(VectorSource(valid_set))
-
-valid_corpus <- preprocess_corpus(valid_corpus)
-
-valid_data <- data.frame(text=sapply(valid_corpus, as.character), 
-                         stringsAsFactors = FALSE)
-valid_table <- as.data.table(valid_data)
-
-
-valid_table <- valid_table[,.(firstTerm=make_firstTerm(text), 
-                              lastTerm=make_lastTerm(text)), by=text]
-
-
-valid_pred <- valid_table[,.(lastTerm, prediction=predict_MI_Trigram_model(firstTerm)),
-                          by=fisrtTerm]
-valid_pred <- valid_pred[,.(lastTerm, prediction, correct=make_OX(lastTerm, prediction)),
-                         by=firstTerm]

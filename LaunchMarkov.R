@@ -10,5 +10,3 @@ for(package in packages){
 }
 
 load("MarkovData.RData")
-
-source("MarkovFunction.R")

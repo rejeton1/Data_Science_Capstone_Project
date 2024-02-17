@@ -334,25 +334,44 @@ predictnextword <- function(inputtext){
     
     twoGramTable1 <- twoGramTable[firstTerms==inputtext_processed2 & !(lastTerm %in% threeGramTable1$lastTerm)]
     
-    if(dim(twoGramTable1)[1] >= 20){
-      twoprob <- twoGramTable1[1:20,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
-    }else{
-      twoprob <- twoGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+    if(dim(twoGramTable1)[1] > 0){
+      if(dim(twoGramTable1)[1] >= 20){
+        twoprob <- twoGramTable1[1:20,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+      }else{
+        twoprob <- twoGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+      }
+      
+      oneGramTable1 <- oneGramTable[!(lastTerm %in% twoGramTable1$lastTerm) & !(lastTerm %in% threeGramTable1$lastTerm)]
+      
+      if(dim(oneGramTable1)[1] >= 20){
+        oneprob <- oneGramTable1[1:20,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+      }else{
+        oneprob <- oneGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+      }
+      
+      finalprob <- rbind(threeprob, twoprob, oneprob)
+      finalprob <- finalprob[!(lastTerm %in% stopwords()) & !(lastTerm %in% c("scsc", "ecec"))][order(-probability)]
+      if(dim(finalprob)[1] == 0){
+        finalprob <- rbind(threeprob, twoprob, oneprob)[order(-probability)]
+      }
+      
+    } else {
+      oneGramTable1 <- oneGramTable[!(lastTerm %in% twoGramTable1$lastTerm) & !(lastTerm %in% threeGramTable1$lastTerm)]
+      
+      if(dim(oneGramTable1)[1] >= 20){
+        oneprob <- oneGramTable1[1:20,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+      }else{
+        oneprob <- oneGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
+      }
+      
+      finalprob <- rbind(threeprob, oneprob)
+      finalprob <- finalprob[!(lastTerm %in% stopwords()) & !(lastTerm %in% c("scsc", "ecec"))][order(-probability)]
+      if(dim(finalprob)[1] == 0){
+        finalprob <- rbind(threeprob, oneprob)[order(-probability)]
+      }
     }
     
-    oneGramTable1 <- oneGramTable[!(lastTerm %in% twoGramTable1$lastTerm) & !(lastTerm %in% threeGramTable1$lastTerm)]
     
-    if(dim(oneGramTable1)[1] >= 20){
-      oneprob <- oneGramTable1[1:20,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
-    }else{
-      oneprob <- oneGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
-    }
-    
-    finalprob <- rbind(threeprob, twoprob, oneprob)
-    finalprob <- finalprob[!(lastTerm %in% stopwords()) & !(lastTerm %in% c("scsc", "ecec"))][order(-probability)]
-    if(dim(finalprob)[1] == 0){
-      finalprob <- rbind(threeprob, twoprob, oneprob)[order(-probability)]
-    }
     
     
   } else if(dim(twoGramTable2)[1] > 0){

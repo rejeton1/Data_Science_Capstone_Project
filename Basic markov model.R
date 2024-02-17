@@ -166,6 +166,12 @@ threeGramTable_leftOverProb = threeGramTable[, .(leftoverprob=calcLeftOverProb(l
 threeGramTable <- mutate(threeGramTable, c_est=frequency*discount)
 threeGramTable <- threeGramTable[order(-c_est)]
 
+################################################################################
+#we reduce the vocabulary (more than 1 frequency)
+oneGramTable <- oneGramTable[frequency > 1]
+twoGramTable <- twoGramTable[frequency > 1]
+threeGramTable <- threeGramTable[frequency > 1]
+
 ##########################################################################################################
 # This function is used to get the probability of a given text, using Katz Backoff (with Good-Turing Discounting).
 # Only consider the last 3 words.
@@ -344,6 +350,9 @@ predictnextword <- function(inputtext){
     
     finalprob <- rbind(threeprob, twoprob, oneprob)
     finalprob <- finalprob[!(lastTerm %in% stopwords()) & !(lastTerm %in% c("scsc", "ecec"))][order(-probability)]
+    if(dim(finalprob)[1] == 0){
+      finalprob <- rbind(threeprob, twoprob, oneprob)[order(-probability)]
+    }
     
     
   } else if(dim(twoGramTable2)[1] > 0){
@@ -364,6 +373,9 @@ predictnextword <- function(inputtext){
     
     finalprob <- rbind(twoprob, oneprob)
     finalprob <- finalprob[!(lastTerm %in% stopwords()) & !(lastTerm %in% c("scsc", "ecec"))][order(-probability)]
+    if(dim(finalprob)[1] == 0){
+      finalprob <- rbind(twoprob, oneprob)[order(-probability)]
+    }
   } else {
     oneGramTable3 <- oneGramTable[1:10]
     oneGramTable3 <- oneGramTable3[!(lastTerm %in% c("scsc", "ecec"))]
@@ -408,7 +420,7 @@ make_OX <- function(answer, prediction){
 
 test_sample <- function(seed_number, num_of_sample){
   set.seed(seed_number)
-  valid_sample <- sample_lines("./final/en_US/en_US.news.txt", n=1)
+  valid_sample <- sample_lines("./final/en_US/en_US.news.txt", n=num_of_sample)
   valid_sample <- str_remove(valid_sample, pattern="\\r$")
   valid_corpus <- VCorpus(VectorSource(valid_sample))
   valid_corpus <- preprocess_corpus(valid_corpus)
@@ -423,10 +435,12 @@ test_sample <- function(seed_number, num_of_sample){
   
   
   eval_table <- valid_trigram_table[!(lastTerm %in% stopwords()) & !(lastTerm %in% c('scsc', 'ecec'))]
-  eval_table <- eval_table[,.(answer=lastTerm, pred=as.character(predictnextword(firstTerm)[1,1]), 
-                              OX=make_OX(lastTerm, predictnextword(firstTerm))), by=firstTerm]
+  eval_table <- unique(eval_table)
+  eval_table <- eval_table[,.(question=firstTerm, answer=lastTerm, 
+                              pred=list(pred1=predictnextword(firstTerm)$lastTerm),
+                              OX=make_OX(lastTerm, predictnextword(firstTerm))), by=trigram]
+  print(paste("Accuracy :" , (sum(eval_table$OX)/dim(eval_table)[1])))
   return(eval_table)
 }
-
 
 

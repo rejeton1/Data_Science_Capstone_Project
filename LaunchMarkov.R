@@ -17,4 +17,4 @@ for(package in packages){
 
 
 
-load("MarkovData.RData")
+load("Markov.RData")

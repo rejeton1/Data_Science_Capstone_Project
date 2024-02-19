@@ -138,7 +138,7 @@ for(ii in 5:1){
   twoGramTable[frequency == currRTimes, discount := currd]
 }
 
-twoGramTable_leftOverProb = twoGramTable[, .(leftoverprob=calcLeftOverProb(lastTerm, frequency, discount)), by=firstTerms]
+twoGramTable_leftOverProb = twoGramTable[, .(leftoverprob=calcLeftOverProb(lastTerm, frequency, discount), Freq=sum(frequency)), by=firstTerms]
 
 twoGramTable <- mutate(twoGramTable, c_est=frequency*discount)
 twoGramTable <- twoGramTable[order(-c_est)]
@@ -161,7 +161,7 @@ for(i in 5:1){
 }
 
 # Calculate the remaining probability (thanks to discounting...).
-threeGramTable_leftOverProb = threeGramTable[, .(leftoverprob=calcLeftOverProb(lastTerm, frequency, discount)), by=firstTerms]
+threeGramTable_leftOverProb = threeGramTable[, .(leftoverprob=calcLeftOverProb(lastTerm, frequency, discount), Freq=sum(frequency)), by=firstTerms]
 
 # We now have two important objects: threeGramTable, threeGramTable_leftOverProb
 # ...
@@ -173,6 +173,8 @@ threeGramTable <- threeGramTable[order(-c_est)]
 oneGramTable <- oneGramTable[frequency > 1]
 twoGramTable <- twoGramTable[frequency > 1]
 threeGramTable <- threeGramTable[frequency > 1]
+twoGramTable_leftOverProb <- twoGramTable_leftOverProb[Freq > 1]
+threeGramTable_leftOverProb <- threeGramTable_leftOverProb[Freq > 1]
 
 ##########################################################################################################
 # This function is used to get the probability of a given text, using Katz Backoff (with Good-Turing Discounting).
@@ -320,12 +322,12 @@ getLastTerms = function(inputString, num = 3){
 #########################################
 #Make predict function(This function predict probability of next words only given lastTerm. Through 3-gram Katz's model.)
 
-predictnextword <- function(inputtext){
+predictnextword <- function(inputtext, voca1=oneGramTable, voca2=twoGramTable, voca3=threeGramTable){
   inputtext_processed1 <- getLastTerms(inputtext, n=2)
   inputtext_processed2 <- getLastTerms(inputtext, n=1)
   
-  threeGramTable1 <- threeGramTable[firstTerms==inputtext_processed1]
-  twoGramTable2 <- twoGramTable[firstTerms==inputtext_processed2]
+  threeGramTable1 <- voca3[firstTerms==inputtext_processed1]
+  twoGramTable2 <- voca2[firstTerms==inputtext_processed2]
   
   if(dim(threeGramTable1)[1] > 0){
     if(dim(threeGramTable1)[1] >= 15){
@@ -334,7 +336,7 @@ predictnextword <- function(inputtext){
       threeprob <- threeGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
     }
     
-    twoGramTable1 <- twoGramTable[firstTerms==inputtext_processed2 & !(lastTerm %in% threeGramTable1$lastTerm)]
+    twoGramTable1 <- voca2[firstTerms==inputtext_processed2 & !(lastTerm %in% threeGramTable1$lastTerm)]
     
     if(dim(twoGramTable1)[1] > 0){
       if(dim(twoGramTable1)[1] >= 15){
@@ -343,7 +345,7 @@ predictnextword <- function(inputtext){
         twoprob <- twoGramTable1[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
       }
       
-      oneGramTable1 <- oneGramTable[!(lastTerm %in% twoGramTable1$lastTerm) & !(lastTerm %in% threeGramTable1$lastTerm)]
+      oneGramTable1 <- voca1[!(lastTerm %in% twoGramTable1$lastTerm) & !(lastTerm %in% threeGramTable1$lastTerm)]
       
       oneprob <- oneGramTable1[1:15,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
 
@@ -355,7 +357,7 @@ predictnextword <- function(inputtext){
       }
       
     } else {
-      oneGramTable1 <- oneGramTable[!(lastTerm %in% twoGramTable1$lastTerm) & !(lastTerm %in% threeGramTable1$lastTerm)]
+      oneGramTable1 <- voca1[!(lastTerm %in% twoGramTable1$lastTerm) & !(lastTerm %in% threeGramTable1$lastTerm)]
       
       if(dim(oneGramTable1)[1] >= 15){
         oneprob <- oneGramTable1[1:15,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
@@ -381,7 +383,7 @@ predictnextword <- function(inputtext){
       twoprob <- twoGramTable2[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
     }
     
-    oneGramTable2 <- oneGramTable[!(lastTerm %in% twoGramTable2$lastTerm)]
+    oneGramTable2 <- voca1[!(lastTerm %in% twoGramTable2$lastTerm)]
     
     oneprob <- oneGramTable2[1:15,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
     
@@ -391,7 +393,7 @@ predictnextword <- function(inputtext){
       finalprob <- rbind(twoprob, oneprob)[order(-probability)]
     }
   } else {
-    oneGramTable3 <- oneGramTable[1:10]
+    oneGramTable3 <- voca1[1:10]
     oneGramTable3 <- oneGramTable3[!(lastTerm %in% c("scsc", "ecec"))]
     
     oneprob <- oneGramTable3[,.(probability=getProbabilityFrom3Gram(paste(inputtext, as.character(lastTerm)))),by=lastTerm][order(-probability)]
@@ -404,6 +406,51 @@ predictnextword <- function(inputtext){
   return(finalprob[1:3])
 }
 
+
+###############################################################################
+#predict with keyword
+pred_with_keyword_matching <- function(inputtext){
+  if(grepl(pattern="\\s$", x=inputtext)){
+    inputtext <- str_remove(inputtext, pattern = "\\s$")
+    input_len <- length(unlist(str_split(inputtext, pattern = "\\s")))
+    if(input_len == 0){
+      inputtext <- paste("scsc scsc", inputtext)
+      return(predictnextword(inputtext))
+    } else if(input_len == 1){
+      inputtext <- paste("scsc", inputtext)
+      return(predictnextword(inputtext))
+    } else if(input_len >= 2){
+      return(predictnextword(inputtext))
+    }
+    
+  } else {
+    if(inputtext == ""){
+      return(predictnextword("scsc scsc"))
+    } else {
+      input_len <- length(unlist(str_split(inputtext, pattern = "\\s")))
+      keyword <- getLastTerms(inputtext, n=1)
+      newvoca1 <- oneGramTable[grepl(pattern = paste("^", keyword, sep = ""), x = lastTerm)]
+      newvoca2 <- twoGramTable[grepl(pattern = paste("^", keyword, sep = ""), x = lastTerm)]
+      newvoca3 <- threeGramTable[grepl(pattern = paste("^", keyword, sep = ""), x = lastTerm)]
+      if(input_len == 1){
+        new_inputtext <- paste("scsc scsc", inputtext)
+        inputtext_wo_keyword <- make_firstTerm(new_inputtext)
+        
+        return(predictnextword(inputtext_wo_keyword, voca1 = newvoca1, voca2 = newvoca2, voca3 = newvoca3))
+      } else if(input_len == 2){
+        new_inputtext <- paste("scsc", inputtext)
+        inputtext_wo_keyword <- make_firstTerm(new_inputtext)
+        
+        return(predictnextword(inputtext_wo_keyword, voca1 = newvoca1, voca2 = newvoca2, voca3 = newvoca3))
+      } else if(input_len >= 3){
+        inputtext_wo_keyword <- make_firstTerm(inputtext)
+        
+        return(predictnextword(inputtext_wo_keyword, voca1 = newvoca1, voca2 = newvoca2, voca3 = newvoca3))
+      }
+    }
+    
+  }
+}
 
 ###############################################################################
 #test this model to one sample

@@ -118,7 +118,7 @@ find_cy <- function(y){
   return(wordpairtable_cy[Y==y, cy])
 }
 
-wordpairtable_important <- wordpairtable[!(x %in% stopwords()) & !(y %in% stopwords()) & c > 5 & !(x %in% c("$","-")) & !(y %in% c("$","-")),
+wordpairtable_important <- wordpairtable[!(x %in% stopwords()) & !(y %in% stopwords()) & c > 4 & !(x %in% c("$","-","u")) & !(y %in% c("$","-","u")),
                                          .(x, y, c, PMI=log((c*all_c)/(find_cx(x)*find_cy(y)))), by=pair]
 
 ###############################################################################

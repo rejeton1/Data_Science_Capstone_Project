@@ -80,7 +80,7 @@ extract_wordpair <- function(sentence, n=3){
 }
 
 
-n_line <- 70000
+n_line <- 10000
 data1 <- readLines("./final/en_US/en_US.blogs.txt", n=n_line)
 data2 <- readLines("./final/en_US/en_US.news.txt", n=n_line)
 data3 <- readLines("./final/en_US/en_US.twitter.txt", n=n_line)
@@ -118,12 +118,12 @@ find_cy <- function(y){
   return(wordpairtable_cy[Y==y, cy])
 }
 
-wordpairtable <- wordpairtable[,.(x, y, c, 
-                                  PMI=log((c*all_c)/(find_cx(x)*find_cy(y)))), by=pair]
+wordpairtable_important <- wordpairtable[!(x %in% stopwords()) & !(y %in% stopwords()) & c > 5 & !(x %in% c("$","-")) & !(y %in% c("$","-")),
+                                         .(x, y, c, PMI=log((c*all_c)/(find_cx(x)*find_cy(y)))), by=pair]
 
 ###############################################################################
 #filtering important wordpair(c > 10, PMI >= 0)
 
-wordpairtable_important <- wordpairtable[c > 10 & PMI >= 0]
+wordpairtable_important <- wordpairtable_important[PMI >= 0]
 
 

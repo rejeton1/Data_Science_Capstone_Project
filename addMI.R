@@ -37,15 +37,13 @@ preprocess_corpus <- function(corpus){
   corpus <- tm_map(corpus, content_transformer(function(x) add_start_end_token(x)))
   corpus <- tm_map(corpus, content_transformer(tolower))
   corpus <- tm_map(corpus, content_transformer(replace_non_ascii))
-  corpus <- tm_map(corpus, removePunctuation, ucp=TRUE, preserve_intra_word_contractions=TRUE,
-                   preserve_intra_word_dashes=TRUE)
+  corpus <- tm_map(corpus, removePunctuation, ucp=TRUE, preserve_intra_word_contractions=TRUE)
   corpus <- tm_map(corpus, removeNumbers)
   corpus <- tm_map(corpus, stripWhitespace)
   corpus <- tm_map(corpus, removeWords, profanity)
   corpus <- tm_map(corpus, removeWords, "$")
   corpus <- tm_map(corpus, stripWhitespace)
-  corpus <- tm_map(corpus, content_transformer(function(x) str_remove(x, pattern="\\s$")))
-  corpus <- tm_map(corpus, content_transformer(function(x) str_remove(x, pattern="^\\s")))
+  corpus <- tm_map(corpus, content_transformer(str_trim))
   return(corpus)
 }
 
@@ -80,7 +78,7 @@ extract_wordpair <- function(sentence, n=3){
 }
 
 
-n_line <- 10000
+n_line <- 30000
 data1 <- readLines("./final/en_US/en_US.blogs.txt", n=n_line)
 data2 <- readLines("./final/en_US/en_US.news.txt", n=n_line)
 data3 <- readLines("./final/en_US/en_US.twitter.txt", n=n_line)
@@ -98,11 +96,12 @@ textdata <- data.table(text=unlist(sapply(corpus, as.character)))
 
 wordpairs <- apply(textdata, 1, extract_wordpair)
 
-
 wordpairtable <- data.table(table(unlist(wordpairs)))[order(-N)]
+
+
 # wordpairtable <- wordpairtable[N > 10]
-wordpairtable <- wordpairtable[,.(x=str_split_i(V1, "\\s", 1), y=str_split_i(V1, "\\s", 2), N), by=V1]
-colnames(wordpairtable) <- c('pair', 'x', 'y', 'c')
+wordpairtable <- wordpairtable[, c("x", "y") := tstrsplit(V1, "\\s")]
+colnames(wordpairtable) <- c('pair', 'c', 'x', 'y')
 all_c <- sum(wordpairtable$c)
 
 wordpairtable_cx <- wordpairtable[,.(cx=sum(c)), by=x][order(-cx)]
@@ -111,19 +110,26 @@ wordpairtable_cy <- wordpairtable[,.(cy=sum(c)), by=y][order(-cy)]
 colnames(wordpairtable_cy) <- c("Y", "cy")
 
 find_cx <- function(x){
-  return(wordpairtable_cx[X==x, cx])
+  return()
 }
 
 find_cy <- function(y){
-  return(wordpairtable_cy[Y==y, cy])
+  return()
 }
 
-wordpairtable_important <- wordpairtable[!(x %in% stopwords()) & !(y %in% stopwords()) & c > 4 & !(x %in% c("$","-","u")) & !(y %in% c("$","-","u")),
-                                         .(x, y, c, PMI=log((c*all_c)/(find_cx(x)*find_cy(y)))), by=pair]
+get_PMI <- function(x, y, c){
+  cx <- wordpairtable_cx[X==x, cx]
+  cy <- wordpairtable_cy[Y==y, cy]
+  PMI <- log((c*all_c)/(cx*cy))
+}
+
+wordpairtable_important <- wordpairtable[!(x %in% stopwords()) & !(y %in% stopwords()) & c > 4 & !(x %in% c("$","-","u")) & !(y %in% c("$","-","u"))]
+
+wordpairtable_important <- wordpairtable_important[, PMI := get_PMI(x, y, c), by=pair]
 
 ###############################################################################
 #filtering important wordpair(c > 10, PMI >= 0)
 
-wordpairtable_important <- wordpairtable_important[PMI >= 0]
+wordpairtable_important <- wordpairtable_important[PMI >= 0][order(-PMI)]
 
 

@@ -78,7 +78,7 @@ extract_wordpair <- function(sentence, n=3){
 }
 
 
-n_line <- 30000
+n_line <- 70000
 data1 <- readLines("./final/en_US/en_US.blogs.txt", n=n_line)
 data2 <- readLines("./final/en_US/en_US.news.txt", n=n_line)
 data3 <- readLines("./final/en_US/en_US.twitter.txt", n=n_line)
@@ -94,11 +94,16 @@ corpus <- tm_map(corpus, content_transformer(split_into_sentence))
 
 textdata <- data.table(text=unlist(sapply(corpus, as.character)))
 
+rm(corpus)                                               
+                                               
 wordpairs <- apply(textdata, 1, extract_wordpair)
 
+rm(textdata)
+                                               
 wordpairtable <- data.table(table(unlist(wordpairs)))[order(-N)]
 
-
+rm(wordpairs)
+   
 # wordpairtable <- wordpairtable[N > 10]
 wordpairtable <- wordpairtable[, c("x", "y") := tstrsplit(V1, "\\s")]
 colnames(wordpairtable) <- c('pair', 'c', 'x', 'y')

@@ -9,7 +9,8 @@
 
 library(shiny)
 
-source("https://raw.githubusercontent.com/rejeton1/Data_Science_Capstone_Project/main/LaunchMarkov.R")
+
+source(url("https://raw.githubusercontent.com/rejeton1/Data_Science_Capstone_Project/main/LaunchMarkov.R"))
 
 
 shinyServer(function(input, output, session) {

@@ -14,6 +14,8 @@ shinyUI(fluidPage(
   
   textAreaInput(inputId="area1", label="(Type here!)"),
   
+  hr(),
+  
   fluidRow(
     column(4,
            actionButton("button1", label=textOutput("word1"))
@@ -25,7 +27,4 @@ shinyUI(fluidPage(
            actionButton("button3", label=textOutput("word3"))
            )
   )
-  
-  
-  
 ))

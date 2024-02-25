@@ -30,12 +30,15 @@ So, it is required to improve the efficiency.
 - Statistical method
 
 ```{r, echo=FALSE, message=FALSE}
-install.packages('png')
+if(!("png" %in% installed.packages())){
+  install.packages('png')
+}
+
 library(png)
 ```
 
 
-```{r}
+```{r, fig.height=3, fig.pos='t'}
 #image
 x <- "https://raw.githubusercontent.com/rejeton1/Data_Science_Capstone_Project/main/How%20to%20solve%20img.png"
 download.file(x,'howtosolve.png', mode = 'wb')
@@ -53,13 +56,13 @@ It can recommend them by giving them a small probability through smoothing metho
 
 ## How it works?
 
-```{r, fig.height=10, fig.width=10}
+```{r, fig.height=7, fig.width=7, fig.align='center'}
 #image
 y <- "https://raw.githubusercontent.com/rejeton1/Data_Science_Capstone_Project/main/howwork.png"
 download.file(y,'howwork.png', mode = 'wb')
-pp1 <- readPNG("howwork.png")
+pp2 <- readPNG("howwork.png")
 plot.new() 
-rasterImage(pp1,0,0,1,1)
+rasterImage(pp2,0,0,1,1)
 ```
 
 
@@ -67,11 +70,11 @@ rasterImage(pp1,0,0,1,1)
 
 ```{r}
 #image
-x <- "https://raw.githubusercontent.com/rejeton1/First_RMarkdown_Presentation/main/game.png"
-download.file(x,'game.jpg', mode = 'wb')
-pp1 <- readPNG("game.png")
+z <- "https://raw.githubusercontent.com/rejeton1/Data_Science_Capstone_Project/main/performance.png"
+download.file(z,'perform.png', mode = 'wb')
+pp3 <- readPNG("perform.png")
 plot.new() 
-rasterImage(pp1,0,0,1,1)
+rasterImage(pp3,0,0,1,1)
 ```
 When type above document with/without this app,
 How long did it take?
@@ -80,4 +83,4 @@ How long did it take?
 
 
 Prediction Accuracy : 0.138
-(about test set size ~~)
+(about test set size 1852)

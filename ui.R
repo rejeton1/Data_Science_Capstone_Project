@@ -10,21 +10,21 @@
 library(shiny)
 
 shinyUI(fluidPage(
-  titlePanel("Smart Note Pad"),
+  titlePanel(h1("Smart Note Pad", align="center")),
   
-  textAreaInput(inputId="area1", label="(Type here!)"),
+  textAreaInput(inputId="area1", label="(Type here!)", width = "100%", height = "1000%"),
   
   hr(),
   
   fluidRow(
     column(4,
-           actionButton("button1", label=textOutput("word1"))
+           actionButton("button1", label=textOutput("word1"), width = "80%", style='font-size:200%')
            ),
     column(4,
-           actionButton("button2", label=textOutput("word2"))
+           actionButton("button2", label=textOutput("word2"), width = "80%", style='font-size:200%')
            ),
     column(4,
-           actionButton("button3", label=textOutput("word3"))
+           actionButton("button3", label=textOutput("word3"), width = "80%", style='font-size:200%')
            )
   )
 ))

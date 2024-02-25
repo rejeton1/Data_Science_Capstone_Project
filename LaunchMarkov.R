@@ -10,7 +10,7 @@ packages <- c('tm', 'lexicon', 'tokenizers', 'stringr', 'ds4psy', 'cld2', 'textc
 
 for(package in packages){
   if(!(package %in% installed.packages())){
-    install.packages(package)
+    install.packages(package, repos = "http://cran.us.r-project.org")
   }
   library(package, character.only = TRUE)
 }

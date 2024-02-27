@@ -14,4 +14,4 @@ for(package in packages){
   library(package, character.only = TRUE)
 }
 
-load(url("https://github.com/rejeton1/Data_Science_Capstone_Project/raw/main/markov.RData"))
+load(url("https://github.com/rejeton1/Data_Science_Capstone_Project/raw/main/markov30.RData"))

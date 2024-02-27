@@ -5,7 +5,7 @@
 
 
 #Install required packages
-packages <- c('tm', 'stringr', 'data.table', 'LaF', 'tokenizers', 'textclean')
+packages <- c('tm', 'stringr', 'data.table', 'LaF', 'textclean')
 
 for(package in packages){
   if(!(package %in% installed.packages())){

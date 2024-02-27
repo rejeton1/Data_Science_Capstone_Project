@@ -5,8 +5,7 @@
 
 
 #Install required packages
-packages <- c('tm', 'lexicon', 'tokenizers', 'stringr', 'ds4psy', 'cld2', 'textclean',
-              'data.table', 'dplyr', 'stopwords', 'LaF')
+packages <- c('tm', 'stringr', 'data.table', 'LaF', 'tokenizers', 'textclean')
 
 for(package in packages){
   if(!(package %in% installed.packages())){

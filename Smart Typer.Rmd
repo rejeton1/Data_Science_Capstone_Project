@@ -10,8 +10,6 @@ knitr::opts_chunk$set(echo = FALSE)
 ```
 
 
-
-
 ## Problem to solve
 
 These days, typing with PC or smartphone is core means of communication.
@@ -19,8 +17,7 @@ But while we're typing, it is inefficient to type all alphabets one-by-one.
 
 So, it is required to improve the efficiency.
 
-
-## If Problem is solved?
+### If Problem is solved?
 
 - Saving time by typing same contents faster.
 - Helping elderly people who are unfamiliar with typing by recommending the most likely words.
@@ -29,58 +26,43 @@ So, it is required to improve the efficiency.
 
 - Statistical method
 
-```{r, echo=FALSE, message=FALSE}
-if(!("png" %in% installed.packages())){
-  install.packages('png')
-}
-
-library(png)
+```{r, echo=FALSE}
+# Define variable containing url
+url1 <- "https://raw.githubusercontent.com/rejeton1/Data_Science_Capstone_Project/main/How%20to%20solve%20img.png"
 ```
 
+<center>![](`r url1`){width=40%, height=40%}</center>
 
-```{r, fig.height=3, fig.pos='t'}
-#image
-x <- "https://raw.githubusercontent.com/rejeton1/Data_Science_Capstone_Project/main/How%20to%20solve%20img.png"
-download.file(x,'howtosolve.png', mode = 'wb')
-pp1 <- readPNG("howtosolve.png")
-plot.new() 
-rasterImage(pp1,0,0,1,1)
-```
-
-- Based on previous two words, recommend 3 words that has the biggest probability.
-- If previous two words don't exist, based on previous one word.
-- If that's not the case, it recognize it is a starting poing of sentence.
-
-* How can it recommend OOV(Out-Of-Vocabulary) in train set?
-It can recommend them by giving them a small probability through smoothing method.
+1. Based on previous two words, recommend 3 words that has the biggest probability.
+2. If previous two words don't exist, based on previous one word.
+3. If that's not the case, it recognize it is a starting poing of sentence.
 
 ## How it works?
-
-```{r, fig.height=7, fig.width=7, fig.align='center'}
-#image
-y <- "https://raw.githubusercontent.com/rejeton1/Data_Science_Capstone_Project/main/howwork.png"
-download.file(y,'howwork.png', mode = 'wb')
-pp2 <- readPNG("howwork.png")
-plot.new() 
-rasterImage(pp2,0,0,1,1)
+```{r, echo=FALSE}
+# Define variable containing url
+url2 <- "https://raw.githubusercontent.com/rejeton1/Data_Science_Capstone_Project/main/howwork.png"
 ```
 
+<center>![](`r url2`){width=65%}</center>
 
-## Performance
+## Faster and Accurate
 
-```{r}
-#image
-z <- "https://raw.githubusercontent.com/rejeton1/Data_Science_Capstone_Project/main/performance.png"
-download.file(z,'perform.png', mode = 'wb')
-pp3 <- readPNG("perform.png")
-plot.new() 
-rasterImage(pp3,0,0,1,1)
+```{r, echo=FALSE}
+# Define variable containing url
+url3 <- "https://raw.githubusercontent.com/rejeton1/Data_Science_Capstone_Project/main/performance.png"
 ```
+
+<center>![](`r url3`)</center>
+
+### Performance 1. Speed
+
 When type above document with/without this app,
 How long did it take?
 
 1. typing one-by-one :     2. typing with app : 
 
+### Performance 2. Accuracy
 
 Prediction Accuracy : 0.138
 (about test set size 1852)
+

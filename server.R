@@ -7,6 +7,10 @@
 #    https://shiny.posit.co/
 #
 
+if(!('shiny' %in% installed.packages())){
+  install.packages('shiny', repos = "http://cran.us.r-project.org")
+}
+
 library(shiny)
 
 

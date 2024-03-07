@@ -56,10 +56,9 @@ url3 <- "https://raw.githubusercontent.com/rejeton1/Data_Science_Capstone_Projec
 
 ### Performance 1. Speed
 
-When type above document with/without this app,
-How long did it take?
+The goal of this app is reducing time spent typing above paragraph when typing with app compared to typing one-by-one.
+But our app hasn't optimized yet enough to reduce that time.
 
-1. typing one-by-one :     2. typing with app : 
 
 ### Performance 2. Accuracy
 
